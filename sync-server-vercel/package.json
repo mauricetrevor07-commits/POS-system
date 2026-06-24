@@ -1,0 +1,7 @@
+{
+  "name": "pos-sync-server-vercel",
+  "version": "1.0.0",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.9.0"
+  }
+}
