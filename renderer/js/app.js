@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('branchBadge').textContent = currentBranch.name;
 
   // Init sync
-  Sync.init(process.env.SYNC_SERVER_URL || 'http://localhost:3002');
+ Sync.init(window.SYNC_SERVER_URL || 'http://localhost:3002');
 
   const loadPage = async (page) => {
     const main = document.getElementById('page-content');
