@@ -7,9 +7,7 @@ const Products = {
         <button class="btn btn-primary" onclick="Products.showForm()">+ Add Product</button>
       </div>
       <div class="card">
-        <div class="card-body" id="productList">
-          <div class="loading-spinner"></div>
-        </div>
+        <div class="card-body" id="productList"><div class="loading-spinner"></div></div>
       </div>`;
     await this.loadList();
   },
@@ -21,8 +19,8 @@ const Products = {
         <td>${Utils.formatCurrency(p.price)}</td>
         <td>${p.stock}</td>
         <td>
-          <button class="btn btn-sm" onclick="Products.editForm(${p.id})">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="Products.deleteProduct(${p.id})">Del</button>
+          <button class="btn btn-sm" onclick="Products.editForm('${p.id}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="Products.deleteProduct('${p.id}')">Del</button>
         </td>
       </tr>`).join('');
     document.getElementById('productList').innerHTML = `
@@ -34,22 +32,10 @@ const Products = {
   showForm(product = null) {
     const isEdit = !!product;
     const content = `
-      <div class="form-group">
-        <label>Name *</label>
-        <input id="prodName" class="form-control" value="${product?.name||''}" />
-      </div>
-      <div class="form-group">
-        <label>Price *</label>
-        <input id="prodPrice" type="number" step="0.01" class="form-control" value="${product?.price||''}" />
-      </div>
-      <div class="form-group">
-        <label>Stock</label>
-        <input id="prodStock" type="number" class="form-control" value="${product?.stock||0}" />
-      </div>
-      <div class="form-group">
-        <label>Barcode</label>
-        <input id="prodBarcode" class="form-control" value="${product?.barcode||''}" />
-      </div>`;
+      <div class="form-group"><label>Name *</label><input id="prodName" class="form-control" value="${product?.name||''}" /></div>
+      <div class="form-group"><label>Price *</label><input id="prodPrice" type="number" step="0.01" class="form-control" value="${product?.price||''}" /></div>
+      <div class="form-group"><label>Stock</label><input id="prodStock" type="number" class="form-control" value="${product?.stock||0}" /></div>
+      <div class="form-group"><label>Barcode</label><input id="prodBarcode" class="form-control" value="${product?.barcode||''}" /></div>`;
     const { close } = Utils.showModal({
       title: isEdit ? 'Edit Product' : 'Add Product',
       content,

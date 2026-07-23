@@ -12,10 +12,12 @@ const Sales = {
     const sales = await DB._fetch('/api/sales');
     const html = sales.map(s => `
       <div style="border-bottom:1px solid #ccc; padding:10px 0;">
-        <strong>Sale #${s.id}</strong> - ${new Date(s.timestamp).toLocaleString()}<br/>
+        <strong>Sale #${s.id}</strong> – ${new Date(s.timestamp).toLocaleString()}<br/>
+        Customer: ${s.customer_name || 'Walk-in'}<br/>
         Total: ${Utils.formatCurrency(s.total)} (${s.paymentMethod})<br/>
         Items: ${s.items.map(i => `${i.productName} x${i.quantity}`).join(', ')}
-      </div>`).join('');
+      </div>
+    `).join('');
     document.getElementById('salesList').innerHTML = html || '<p>No sales yet.</p>';
   }
 };

@@ -19,10 +19,16 @@ const Utils = {
     return Number(amount).toFixed(2);
   },
   toast(msg, type='info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      document.body.appendChild(container);
+    }
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.textContent = msg;
-    document.body.appendChild(toast);
+    container.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
   },
   showModal({ title, content, size, footer }) {

@@ -37,5 +37,15 @@ const Cache = {
       store.put({ value, expiry: Date.now() + ttl }, key);
       tx.oncomplete = resolve;
     });
+  },
+  async clear() {
+    if (!this.db) await this.init();
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction('store', 'readwrite');
+      const store = tx.objectStore('store');
+      store.clear();
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+    });
   }
 };
