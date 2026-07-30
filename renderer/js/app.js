@@ -42,6 +42,7 @@ function buildSidebar() {
   const nav = document.getElementById('mainNav');
   nav.innerHTML = '';
 
+  // ── Normal navigation items ──────────
   const items = [
     { page: 'pos', label: 'New Sale', icon: 'bi-cart3' },
   ];
@@ -60,20 +61,7 @@ function buildSidebar() {
     items.push({ page: 'settings', label: 'Settings', icon: 'bi-gear' });
   }
 
-  // ─── Logout button ────────────────────
-  const logoutLi = document.createElement('li');
-  logoutLi.className = 'nav-item';
-  logoutLi.style.marginTop = 'auto';
-  logoutLi.innerHTML = `<a href="#" id="logoutBtn" style="color:#ef4444;"><i class="bi bi-box-arrow-right"></i> Logout</a>`;
-  nav.appendChild(logoutLi);
-
-  document.getElementById('logoutBtn').addEventListener('click', (e) => {
-    e.preventDefault();
-    localStorage.clear();
-    location.reload();
-  });
-
-  // Build the normal menu items
+  // Add normal items first
   items.forEach(item => {
     const li = document.createElement('li');
     li.className = 'nav-item';
@@ -81,16 +69,29 @@ function buildSidebar() {
     nav.appendChild(li);
   });
 
-  // Attach click events to all [data-page] links
+  // ── Logout button (always at the bottom) ──
+  const logoutLi = document.createElement('li');
+  logoutLi.className = 'nav-item';
+  logoutLi.style.marginTop = 'auto';   // pushes it to the bottom
+  logoutLi.innerHTML = `<a href="#" id="logoutBtn" style="color:#ef4444;"><i class="bi bi-box-arrow-right"></i> Logout</a>`;
+  nav.appendChild(logoutLi);
+
+  // Attach logout event
+  document.getElementById('logoutBtn').addEventListener('click', (e) => {
+    e.preventDefault();
+    localStorage.clear();
+    location.reload();
+  });
+
+  // Attach click events for normal page links
   document.querySelectorAll('[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const page = link.getAttribute('data-page');
 
-      // 🆕 Close the sidebar automatically on mobile
+      // Auto‑close sidebar on mobile after selecting a page
       if (window.innerWidth <= 768) {
-        const sidebar = document.querySelector('.sidebar');
-        if (sidebar) sidebar.classList.remove('open');
+        document.querySelector('.sidebar')?.classList.remove('open');
       }
 
       loadPage(page);

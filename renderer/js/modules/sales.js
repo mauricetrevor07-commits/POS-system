@@ -45,7 +45,7 @@ const Sales = {
             Customer: ${s.customer_name || 'Walk-in'}<br/>
             Total: KES ${Utils.formatCurrency(s.total)} (${s.paymentMethod})<br/>
             Ref: ${s.payment_reference || 'N/A'}<br/>
-            Items: ${(s.items || []).map(i => `${i.productName} x${i.quantity}`).join(', ')}
+            Items: ${(s.items || []).map(i => `${i.productname} x${i.quantity}`).join(', ')}
           </div>`).join('')
       : '<p>No sales found.</p>';
   }
