@@ -12,7 +12,7 @@ const AdminPayments = {
                 Customer: ${p.customer_name || 'Walk-in'}<br/>
                 Total: ${Utils.formatCurrency(p.total)} – Method: ${p.paymentMethod}<br/>
                 Reference: ${p.payment_reference || 'N/A'}<br/>
-                Items: ${p.items.map(i => `${i.productName} x${i.quantity}`).join(', ')}
+                Items: ${p.items.map(i => `${i.productname} x${i.quantity}`).join(', ')}
                 <div style="margin-top:5px;">
                     <button class="btn btn-sm btn-success" onclick="AdminPayments.approve('${p.id}')">Approve</button>
                     <button class="btn btn-sm btn-danger" onclick="AdminPayments.reject('${p.id}')">Reject</button>

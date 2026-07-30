@@ -365,7 +365,7 @@ app.put('/api/payments/:saleId/approve', authMiddleware, adminOnly, async (req, 
     // Deduct stock
     const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [req.params.saleId]);
     for (const item of items.rows) {
-      await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.productId]);
+      await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.productid]);
     }
     await db.query("UPDATE sales SET payment_status = 'approved' WHERE id = $1", [req.params.saleId]);
     res.json({ success: true });
