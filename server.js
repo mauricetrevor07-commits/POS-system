@@ -45,7 +45,7 @@ function adminOnly(req, res, next) {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await db.query('SELECT * FROM users WHERE username = ?', [username]);
+    const user = await db.query('SELECT * FROM users WHERE username = $1', [username]);
     if (!user.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
 
     const valid = bcrypt.compareSync(password, user.rows[0].password);
@@ -94,26 +94,38 @@ app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
     if (!username || !role) return res.status(400).json({ error: 'Missing required fields' });
     
     if (id) {
+      // Update – build dynamic SET clause
+      const fields = [];
+      const vals = [];
+      let idx = 1;
+      fields.push(`username=$${idx++}`); vals.push(username);
+      fields.push(`role=$${idx++}`); vals.push(role);
+      if (name !== undefined) { fields.push(`name=$${idx++}`); vals.push(name); }
+      if (branch_id !== undefined) { fields.push(`branch_id=$${idx++}`); vals.push(branch_id); }
       if (password) {
         const hash = bcrypt.hashSync(password, 10);
-        await db.query('UPDATE users SET username=?, password=?, role=?, name=?, branch_id=? WHERE id=?', [username, hash, role, name, branch_id, id]);
-      } else {
-        await db.query('UPDATE users SET username=?, role=?, name=?, branch_id=? WHERE id=?', [username, role, name, branch_id, id]);
+        fields.push(`password=$${idx++}`); vals.push(hash);
       }
+      vals.push(id);
+      const setClause = fields.join(',');
+      await db.query(`UPDATE users SET ${setClause} WHERE id=$${idx}`, vals);
     } else {
-      const newId = crypto.randomUUID();
-      const hash = bcrypt.hashSync(password || '123456', 10);
-      await db.query('INSERT INTO users (id, username, password, role, name, branch_id) VALUES (?, ?, ?, ?, ?, ?)', [newId, username, hash, role, name, branch_id]);
+      // Create new user
+      if (!password) return res.status(400).json({ error: 'Password is required for new users' });
+      const newId = randomUUID();
+      const hash = bcrypt.hashSync(password, 10);
+      await db.query(
+        'INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)',
+        [newId, username, hash, role, name || null, branch_id || null]
+      );
     }
-    db.flush();
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
-    await db.query('DELETE FROM users WHERE id = ?', [req.params.id]);
-    db.flush();
+    await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -152,11 +164,10 @@ app.post('/api/settings', authMiddleware, adminOnly, async (req, res) => {
     const { key, value } = req.body;
     if (!key) return res.status(400).json({ error: 'Key is required' });
     await db.query(
-      `INSERT INTO settings (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = ?`,
-      [key, value, value]
+      `INSERT INTO settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [key, value]
     );
-    db.flush();
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -171,7 +182,7 @@ app.get('/api/products', authMiddleware, async (req, res) => {
 
 app.get('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM products WHERE id = ?', [req.params.id]);
+    const result = await db.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'Product not found' });
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -182,7 +193,7 @@ app.post('/api/products', authMiddleware, async (req, res) => {
     const id = randomUUID();
     const { name, price, barcode, category, stock } = req.body;
     await db.query(
-      `INSERT INTO products (id, name, price, stock, barcode, category) VALUES (?,?,?,?,?,?)`,
+      `INSERT INTO products (id, name, price, stock, barcode, category) VALUES ($1,$2,$3,$4,$5,$6)`,
       [id, name, price, stock || 0, barcode || null, category || null]
     );
     res.status(201).json({ id, ...req.body, stock: stock || 0 });
@@ -195,9 +206,9 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
     const data = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
     if (Object.keys(data).length) {
-      const set = Object.keys(data).map(k => `${k}=?`).join(',');
+      const set = Object.keys(data).map((k, i) => `"${k}"=$${i+1}`).join(',');
       const vals = Object.values(data);
-      await db.query(`UPDATE products SET ${set}, updated_at=datetime('now','localtime') WHERE id=?`, [...vals, req.params.id]);
+      await db.query(`UPDATE products SET ${set}, updated_at=NOW() WHERE id=$${vals.length+1}`, [...vals, req.params.id]);
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -205,7 +216,7 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
 
 app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    await db.query('DELETE FROM products WHERE id=?', [req.params.id]);
+    await db.query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -220,7 +231,7 @@ app.get('/api/customers', authMiddleware, async (req, res) => {
 
 app.get('/api/customers/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    const result = await db.query('SELECT * FROM customers WHERE id = $1', [req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'Customer not found' });
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -231,7 +242,7 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
     const id = randomUUID();
     const { name, contact_person, phone, email, address } = req.body;
     await db.query(
-      `INSERT INTO customers (id, name, contact_person, phone, email, address) VALUES (?,?,?,?,?,?)`,
+      `INSERT INTO customers (id, name, contact_person, phone, email, address) VALUES ($1,$2,$3,$4,$5,$6)`,
       [id, name, contact_person || null, phone || null, email || null, address || null]
     );
     res.status(201).json({ id, ...req.body });
@@ -244,9 +255,9 @@ app.put('/api/customers/:id', authMiddleware, async (req, res) => {
     const data = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
     if (Object.keys(data).length) {
-      const set = Object.keys(data).map(k => `${k}=?`).join(',');
+      const set = Object.keys(data).map((k, i) => `"${k}"=$${i+1}`).join(',');
       const vals = Object.values(data);
-      await db.query(`UPDATE customers SET ${set}, updated_at=datetime('now','localtime') WHERE id=?`, [...vals, req.params.id]);
+      await db.query(`UPDATE customers SET ${set}, updated_at=NOW() WHERE id=$${vals.length+1}`, [...vals, req.params.id]);
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -256,7 +267,7 @@ app.put('/api/customers/:id', authMiddleware, async (req, res) => {
 app.get('/api/customer-prices/:customerId', authMiddleware, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT cp.*, p.name AS product_name FROM customer_prices cp JOIN products p ON cp.product_id = p.id WHERE cp.customer_id = ?`,
+      `SELECT cp.*, p.name AS product_name FROM customer_prices cp JOIN products p ON cp.product_id = p.id WHERE cp.customer_id = $1`,
       [req.params.customerId]
     );
     res.json(result.rows);
@@ -268,9 +279,9 @@ app.post('/api/customer-prices', authMiddleware, async (req, res) => {
     const id = randomUUID();
     const { customer_id, product_id, custom_price } = req.body;
     await db.query(
-      `INSERT INTO customer_prices (id, customer_id, product_id, custom_price) VALUES (?,?,?,?)
-       ON CONFLICT(customer_id, product_id) DO UPDATE SET custom_price = ?`,
-      [id, customer_id, product_id, custom_price, custom_price]
+      `INSERT INTO customer_prices (id, customer_id, product_id, custom_price) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (customer_id, product_id) DO UPDATE SET custom_price = $4`,
+      [id, customer_id, product_id, custom_price]
     );
     res.status(201).json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -289,7 +300,7 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
 
     let total = 0;
     for (const item of items) {
-      const prod = await db.query('SELECT * FROM products WHERE id=?', [item.productId]);
+      const prod = await db.query('SELECT * FROM products WHERE id=$1', [item.productId]);
       if (!prod.rows.length) return res.status(404).json({ error: `Product ${item.productId} not found` });
       const product = prod.rows[0];
       if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
@@ -297,7 +308,7 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       // Apply customer-specific price if exists
       let price = product.price;
       if (customer_id) {
-        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=? AND product_id=?', [customer_id, item.productId]);
+        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
         if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
       }
       total += price * item.quantity;
@@ -306,25 +317,24 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     const saleId = randomUUID();
     await db.query(
       `INSERT INTO sales (id, branch_id, customer_id, total, paymentMethod, payment_reference, payment_status, status, created_by)
-       VALUES (?,?,?,?,?,?,'pending_payment','completed',?)`,
+       VALUES ($1,$2,$3,$4,$5,$6,'pending_payment','completed',$7)`,
       [saleId, BRANCH_ID, customer_id || null, total, paymentMethod, payment_reference, req.user.username]
     );
 
     for (const item of items) {
-      const prod = await db.query('SELECT * FROM products WHERE id=?', [item.productId]);
+      const prod = await db.query('SELECT * FROM products WHERE id=$1', [item.productId]);
       const p = prod.rows[0];
       let price = p.price;
       if (customer_id) {
-        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=? AND product_id=?', [customer_id, item.productId]);
+        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
         if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
       }
       await db.query(
-        `INSERT INTO sale_items (saleId, productId, productName, quantity, price) VALUES (?,?,?,?,?)`,
+        `INSERT INTO sale_items (saleId, productId, productName, quantity, price) VALUES ($1,$2,$3,$4,$5)`,
         [saleId, item.productId, p.name, item.quantity, price]
       );
-      await db.query(`UPDATE products SET stock = stock - ? WHERE id = ?`, [item.quantity, item.productId]);
+      // NOTE: Stock is NOT deducted here – it waits for admin approval
     }
-    db.flush();
 
     res.status(201).json({ id: saleId, total, paymentMethod, payment_status: 'pending_payment', message: 'Payment pending admin approval' });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -341,7 +351,7 @@ app.get('/api/pending-payments', authMiddleware, adminOnly, async (req, res) => 
       ORDER BY s.timestamp DESC
     `);
     for (let sale of sales.rows) {
-      const items = await db.query('SELECT * FROM sale_items WHERE saleId = ?', [sale.id]);
+      const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [sale.id]);
       sale.items = items.rows;
     }
     res.json(sales.rows);
@@ -350,21 +360,21 @@ app.get('/api/pending-payments', authMiddleware, adminOnly, async (req, res) => 
 
 app.put('/api/payments/:saleId/approve', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const sale = await db.query('SELECT * FROM sales WHERE id = ?', [req.params.saleId]);
+    const sale = await db.query('SELECT * FROM sales WHERE id = $1', [req.params.saleId]);
     if (!sale.rows.length) return res.status(404).json({ error: 'Sale not found' });
     // Deduct stock
-    const items = await db.query('SELECT * FROM sale_items WHERE saleId = ?', [req.params.saleId]);
+    const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [req.params.saleId]);
     for (const item of items.rows) {
-      await db.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.productId]);
+      await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.productId]);
     }
-    await db.query("UPDATE sales SET payment_status = 'approved' WHERE id = ?", [req.params.saleId]);
+    await db.query("UPDATE sales SET payment_status = 'approved' WHERE id = $1", [req.params.saleId]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/payments/:saleId/reject', authMiddleware, adminOnly, async (req, res) => {
   try {
-    await db.query("UPDATE sales SET payment_status = 'rejected' WHERE id = ?", [req.params.saleId]);
+    await db.query("UPDATE sales SET payment_status = 'rejected' WHERE id = $1", [req.params.saleId]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -380,18 +390,19 @@ app.get('/api/sales', authMiddleware, async (req, res) => {
     sql += " ORDER BY s.timestamp DESC";
     const sales = await db.query(sql);
     const saleIds = sales.rows.map(s => s.id);
-    let items = [];
-    if (saleIds.length > 0) {
-      const placeholders = saleIds.map(() => '?').join(',');
-      items = (await db.query(`SELECT * FROM sale_items WHERE saleId IN (${placeholders})`, saleIds)).rows;
+    if (saleIds.length) {
+      const placeholders = saleIds.map((_, i) => `$${i+1}`).join(',');
+      const items = await db.query(`SELECT * FROM sale_items WHERE saleId IN (${placeholders})`, saleIds);
+      const grouped = {};
+      items.rows.forEach(i => {
+        if (!grouped[i.saleid]) grouped[i.saleid] = [];
+        grouped[i.saleid].push(i);
+      });
+      for (const sale of sales.rows) sale.items = grouped[sale.id] || [];
+    } else {
+      for (const sale of sales.rows) sale.items = [];
     }
-    const grouped = {};
-    items.forEach(i => {
-      if (!grouped[i.saleId]) grouped[i.saleId] = [];
-      grouped[i.saleId].push(i);
-    });
-    const result = sales.rows.map(s => ({ ...s, items: grouped[s.id] || [] }));
-    res.json(result);
+    res.json(sales.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -399,19 +410,20 @@ app.get('/api/sales', authMiddleware, async (req, res) => {
 app.get('/api/reports/sales-summary', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { from, to } = req.query;
-    let sql = `SELECT COUNT(*) AS total_sales, SUM(total) AS total_amount FROM sales WHERE payment_status = 'approved'`;
+    let sql = `SELECT COUNT(*)::int AS total_sales, COALESCE(SUM(total),0) AS total_amount FROM sales WHERE payment_status = 'approved'`;
     const params = [];
-    if (from) { sql += ' AND timestamp >= ?'; params.push(from); }
-    if (to)   { sql += ' AND timestamp <= ?'; params.push(to); }
+    let idx = 0;
+    if (from) { idx++; sql += ` AND timestamp >= $${idx}`; params.push(from); }
+    if (to)   { idx++; sql += ` AND timestamp <= $${idx}`; params.push(to); }
     const result = await db.query(sql, params);
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Transfers (unchanged) ─────────────
+// ─── Transfers (unchanged logic, PostgreSQL syntax) ──
 app.get('/api/transfers', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM transfers WHERE from_branch_id = ? OR to_branch_id = ? ORDER BY created_at DESC', [BRANCH_ID, BRANCH_ID]);
+    const result = await db.query('SELECT * FROM transfers WHERE from_branch_id = $1 OR to_branch_id = $1 ORDER BY created_at DESC', [BRANCH_ID]);
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -421,14 +433,14 @@ app.post('/api/transfers', authMiddleware, async (req, res) => {
     const id = randomUUID();
     const { to_branch_id, items } = req.body;
     for (const item of items) {
-      await db.query('UPDATE products SET stock = stock - ? WHERE id = ?', [item.quantity, item.product_id]);
+      await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
     }
     await db.query(
-      "INSERT INTO transfers (id, from_branch_id, to_branch_id, status) VALUES (?,?,?,'pending')",
+      "INSERT INTO transfers (id, from_branch_id, to_branch_id, status) VALUES ($1,$2,$3,'pending')",
       [id, BRANCH_ID, to_branch_id]
     );
     for (const item of items) {
-      await db.query('INSERT INTO transfer_items (transfer_id, product_id, quantity) VALUES (?,?,?)',
+      await db.query('INSERT INTO transfer_items (transfer_id, product_id, quantity) VALUES ($1,$2,$3)',
         [id, item.product_id, item.quantity]);
     }
     res.status(201).json({ id, status: 'pending' });
@@ -437,21 +449,21 @@ app.post('/api/transfers', authMiddleware, async (req, res) => {
 
 app.put('/api/transfers/:id/receive', authMiddleware, async (req, res) => {
   try {
-    const transfer = await db.query('SELECT * FROM transfers WHERE id = ? AND to_branch_id = ?', [req.params.id, BRANCH_ID]);
+    const transfer = await db.query('SELECT * FROM transfers WHERE id = $1 AND to_branch_id = $2', [req.params.id, BRANCH_ID]);
     if (!transfer.rows.length) return res.status(404).json({ error: 'Transfer not found' });
-    const items = await db.query('SELECT * FROM transfer_items WHERE transfer_id = ?', [req.params.id]);
+    const items = await db.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [req.params.id]);
     for (const item of items.rows) {
-      await db.query('UPDATE products SET stock = stock + ? WHERE id = ?', [item.quantity, item.product_id]);
+      await db.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [item.quantity, item.product_id]);
     }
     await db.query(
-      "UPDATE transfers SET status = 'received', received_at = datetime('now','localtime') WHERE id = ?",
+      "UPDATE transfers SET status = 'received', received_at = NOW() WHERE id = $1",
       [req.params.id]
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Sync helpers (dummy for offline mode) ──
+// ─── Sync helpers (dummy) ───────────────
 app.get('/api/sync/pending-sales', authMiddleware, (req, res) => res.json([]));
 app.get('/api/sync/pending-products', authMiddleware, (req, res) => res.json([]));
 app.get('/api/sync/pending-customers', authMiddleware, (req, res) => res.json([]));
