@@ -18,19 +18,29 @@ const Utils = {
   formatCurrency(amount) {
     return Number(amount).toFixed(2);
   },
-  toast(msg, type='info') {
+
+  // ── improved toast with container ─────
+  toast(msg, type = 'info') {
+    // ensure container exists
     let container = document.getElementById('toast-container');
     if (!container) {
       container = document.createElement('div');
       container.id = 'toast-container';
       document.body.appendChild(container);
     }
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.textContent = msg;
+    toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i> ${msg}`;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(50px)';
+      setTimeout(() => toast.remove(), 300);
+    }, 4000);
   },
+
   showModal({ title, content, size, footer }) {
     const id = 'modal-' + Date.now();
     const html = `

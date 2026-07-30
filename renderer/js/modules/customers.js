@@ -1,35 +1,63 @@
 const Customers = {
+  allCustomers: [],
+
   async render() {
     const container = document.getElementById('page-content');
     container.innerHTML = `
       <div class="toolbar no-print">
         <h2>Customers</h2>
-        <button class="btn btn-primary" onclick="Customers.showForm()">+ Add Customer</button>
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="customerSearch" class="form-control" placeholder="Search by name, phone..." style="max-width:350px;" oninput="Customers.filter()" />
+          <button class="btn btn-primary" onclick="Customers.showForm()">+ Add Customer</button>
+        </div>
       </div>
       <div class="card">
         <div class="card-body" id="customersList"><div class="loading-spinner"></div></div>
       </div>`;
     await this.loadList();
   },
+
   async loadList() {
-    const customers = await DB._fetch('/api/customers');
-    const html = customers.map(c => `
-      <tr>
-        <td>${Utils.escapeHtml(c.name)}</td>
-        <td>${c.contact_person || ''}</td>
-        <td>${c.phone || ''}</td>
-        <td>
-          <button class="btn btn-sm" onclick="Customers.editForm('${c.id}')">Edit</button>
-          <button class="btn btn-sm" onclick="Customers.managePrices('${c.id}')">Prices</button>
-        </td>
-      </tr>`).join('');
-    document.getElementById('customersList').innerHTML = `
-      <table>
-        <thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th></th></tr></thead>
-        <tbody>${html || '<tr><td colspan="4">No customers</td></tr>'}</tbody>
-      </table>`;
+    try {
+      this.allCustomers = await DB._fetch('/api/customers');
+      this.filter();
+    } catch (e) {
+      document.getElementById('customersList').innerHTML = '<p>Failed to load customers.</p>';
+    }
   },
+
+  filter() {
+    const query = (document.getElementById('customerSearch')?.value || '').toLowerCase();
+    const filtered = this.allCustomers.filter(c => {
+      if (!query) return true;
+      const name = (c.name || '').toLowerCase();
+      const phone = (c.phone || '').toLowerCase();
+      const contact = (c.contact_person || '').toLowerCase();
+      return name.includes(query) || phone.includes(query) || contact.includes(query);
+    });
+
+    const list = document.getElementById('customersList');
+    if (!list) return;
+
+    list.innerHTML = filtered.length
+      ? `<table>
+          <thead><tr><th>Name</th><th>Contact</th><th>Phone</th><th></th></tr></thead>
+          <tbody>${filtered.map(c => `
+            <tr>
+              <td>${Utils.escapeHtml(c.name)}</td>
+              <td>${c.contact_person || ''}</td>
+              <td>${c.phone || ''}</td>
+              <td>
+                <button class="btn btn-sm" onclick="Customers.editForm('${c.id}')">Edit</button>
+                <button class="btn btn-sm" onclick="Customers.managePrices('${c.id}')">Prices</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`
+      : '<p>No customers found.</p>';
+  },
+
   showForm(customer = null) {
+    // same as before – leave unchanged
     const isEdit = !!customer;
     const content = `
       <div class="form-group"><label>Name *</label><input id="custName" class="form-control" value="${customer?.name||''}" /></div>
@@ -63,10 +91,14 @@ const Customers = {
       } catch (e) { Utils.toast(e.message, 'error'); }
     });
   },
+
   editForm(id) {
-    DB._fetch(`/api/customers/${id}`).then(c => this.showForm(c));
+    const customer = this.allCustomers.find(c => c.id === id);
+    if (customer) this.showForm(customer);
   },
+
   async managePrices(customerId) {
+    // unchanged – keep existing implementation
     const [products, prices] = await Promise.all([
       DB._fetch('/api/products'),
       DB._fetch(`/api/customer-prices/${customerId}`)
@@ -93,16 +125,11 @@ const Customers = {
         product_id: p.id,
         custom_price: parseFloat(document.getElementById(`price-${p.id}`).value) || p.price
       }));
-      try {
-        await DB._fetch('/api/customer-prices/bulk', {
-          method: 'POST',
-          body: JSON.stringify({ updates })
-        });
-        Utils.toast('Prices updated', 'success');
-        close();
-      } catch (e) {
-        Utils.toast(e.message, 'error');
+      for (const u of updates) {
+        await DB._fetch('/api/customer-prices', { method: 'POST', body: JSON.stringify(u) });
       }
+      Utils.toast('Prices updated', 'success');
+      close();
     });
   }
 };

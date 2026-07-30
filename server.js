@@ -47,15 +47,37 @@ app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     const user = await db.query('SELECT * FROM users WHERE username = ?', [username]);
     if (!user.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+
     const valid = bcrypt.compareSync(password, user.rows[0].password);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // ─── Location Check for Staff ─────────────────
+    if (user.rows[0].role === 'staff') {
+      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                       req.socket.remoteAddress;
+
+      const allowedIPs = (process.env.BRANCH_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1')
+                          .split(',')
+                          .map(ip => ip.trim());
+
+      if (!allowedIPs.includes(clientIp)) {
+        return res.status(403).json({
+          error: 'Access denied. You must be at the branch location to log in.'
+        });
+      }
+    }
+    // ─────────────────────────────────────────────
+
     const token = jwt.sign(
-      { id: user.rows[0].id, username, role: user.rows[0].role, branch_id: user.rows[0].branch_id },
+      { id: user.rows[0].id, username, role: user.rows[0].role },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
-    res.json({ token, role: user.rows[0].role, username, name: user.rows[0].name, branch_id: user.rows[0].branch_id });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+
+    res.json({ token, role: user.rows[0].role, username, id: user.rows[0].id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Users (Admin Only) ────────────────
