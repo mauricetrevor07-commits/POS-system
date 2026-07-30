@@ -60,18 +60,10 @@ function buildSidebar() {
     items.push({ page: 'settings', label: 'Settings', icon: 'bi-gear' });
   }
 
-  // Build the navigation items
-  items.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'nav-item';
-    li.innerHTML = `<a href="#" data-page="${item.page}"><i class="${item.icon}"></i> ${item.label}</a>`;
-    nav.appendChild(li);
-  });
-
-  // ─── Logout button at the bottom ─────
+  // ─── Logout button ────────────────────
   const logoutLi = document.createElement('li');
   logoutLi.className = 'nav-item';
-  logoutLi.style.marginTop = 'auto';          // pushes it to the bottom
+  logoutLi.style.marginTop = 'auto';
   logoutLi.innerHTML = `<a href="#" id="logoutBtn" style="color:#ef4444;"><i class="bi bi-box-arrow-right"></i> Logout</a>`;
   nav.appendChild(logoutLi);
 
@@ -81,11 +73,26 @@ function buildSidebar() {
     location.reload();
   });
 
-  // Attach click events for normal page links
+  // Build the normal menu items
+  items.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'nav-item';
+    li.innerHTML = `<a href="#" data-page="${item.page}"><i class="${item.icon}"></i> ${item.label}</a>`;
+    nav.appendChild(li);
+  });
+
+  // Attach click events to all [data-page] links
   document.querySelectorAll('[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const page = link.getAttribute('data-page');
+
+      // 🆕 Close the sidebar automatically on mobile
+      if (window.innerWidth <= 768) {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) sidebar.classList.remove('open');
+      }
+
       loadPage(page);
     });
   });
@@ -138,6 +145,7 @@ async function loadPage(page) {
   if (activeLink) activeLink.classList.add('active');
 }
 function toggleSidebar() {
-  document.querySelector('.sidebar').classList.toggle('open');
+  const sidebar = document.querySelector('.sidebar');
+  sidebar.classList.toggle('open');
 }
 document.addEventListener('DOMContentLoaded', initApp);
