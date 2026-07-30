@@ -137,5 +137,7 @@ async function loadPage(page) {
   const activeLink = document.querySelector(`[data-page="${page}"]`);
   if (activeLink) activeLink.classList.add('active');
 }
-
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+}
 document.addEventListener('DOMContentLoaded', initApp);
