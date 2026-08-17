@@ -45,36 +45,53 @@ function adminOnly(req, res, next) {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const user = await db.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (!user.rows.length) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const user = await db.query('SELECT * FROM users WHERE LOWER(TRIM(username)) = LOWER(TRIM($1))', [username]);
+    if (!user.rows.length) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
 
     const valid = bcrypt.compareSync(password, user.rows[0].password);
-    if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
 
     // ─── Location Check for Staff ─────────────────
     if (user.rows[0].role === 'staff') {
-      const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                       req.socket.remoteAddress;
+      let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                     req.socket.remoteAddress || '';
 
-      const allowedIPs = (process.env.BRANCH_ALLOWED_IPS || '127.0.0.1,::1,::ffff:127.0.0.1')
-                          .split(',')
-                          .map(ip => ip.trim());
+      if (clientIp.startsWith('::ffff:')) {
+        clientIp = clientIp.substring(7);
+      }
 
-      if (!allowedIPs.includes(clientIp)) {
-        return res.status(403).json({
-          error: 'Access denied. You must be at the branch location to log in.'
-        });
+      const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost' || clientIp === '' ||
+                      clientIp.startsWith('192.168.') || clientIp.startsWith('10.') || clientIp.startsWith('172.');
+
+      if (process.env.BRANCH_ALLOWED_IPS && !isLocal) {
+        const allowedIPs = process.env.BRANCH_ALLOWED_IPS
+                            .split(',')
+                            .map(ip => ip.trim().replace(/^::ffff:/, ''));
+
+        if (!allowedIPs.includes(clientIp)) {
+          return res.status(403).json({
+            error: `Access denied from IP ${clientIp}. You must be at the branch location to log in.`
+          });
+        }
       }
     }
     // ─────────────────────────────────────────────
 
     const token = jwt.sign(
-      { id: user.rows[0].id, username, role: user.rows[0].role },
+      { id: user.rows[0].id, username: user.rows[0].username, role: user.rows[0].role },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    res.json({ token, role: user.rows[0].role, username, id: user.rows[0].id });
+    res.json({ token, role: user.rows[0].role, username: user.rows[0].username, name: user.rows[0].name, id: user.rows[0].id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -188,7 +205,7 @@ app.get('/api/products/:id', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/products', authMiddleware, async (req, res) => {
+app.post('/api/products', authMiddleware, adminOnly, async (req, res) => {
   try {
     const id = randomUUID();
     const { name, price, barcode, category, stock } = req.body;
@@ -200,7 +217,7 @@ app.post('/api/products', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.put('/api/products/:id', authMiddleware, async (req, res) => {
+app.put('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     const allowed = ['name','price','stock','barcode','category'];
     const data = {};
@@ -214,7 +231,7 @@ app.put('/api/products/:id', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.delete('/api/products/:id', authMiddleware, async (req, res) => {
+app.delete('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
     await db.query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ success: true });
@@ -387,7 +404,7 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
 app.get('/api/pending-payments', authMiddleware, adminOnly, async (req, res) => {
   try {
     const sales = await db.query(`
-      SELECT s.*, c.name AS customer_name
+      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone
       FROM sales s
       LEFT JOIN customers c ON s.customer_id = c.id
       WHERE s.payment_status = 'pending_payment'
@@ -426,12 +443,16 @@ app.put('/api/payments/:saleId/reject', authMiddleware, adminOnly, async (req, r
 app.get('/api/sales', authMiddleware, async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
-    let sql = `SELECT s.*, c.name AS customer_name FROM sales s LEFT JOIN customers c ON s.customer_id = c.id`;
+    let sql = `
+      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone 
+      FROM sales s 
+      LEFT JOIN customers c ON s.customer_id = c.id
+    `;
     if (!isAdmin) {
-      sql += " WHERE s.payment_status = 'approved'";
+      sql += " WHERE s.payment_status = 'approved' OR s.created_by = $1";
     }
     sql += " ORDER BY s.timestamp DESC";
-    const sales = await db.query(sql);
+    const sales = await db.query(sql, !isAdmin ? [req.user.username] : []);
     const saleIds = sales.rows.map(s => s.id);
     if (saleIds.length) {
       const placeholders = saleIds.map((_, i) => `$${i+1}`).join(',');

@@ -18,11 +18,12 @@ async function initApp() {
     window.currentBranch = currentBranch;
     document.getElementById('branchBadge').textContent = currentBranch.name;
 
-    // Build currentUser with id from localStorage
+    // Build currentUser from localStorage
     currentUser = {
       token,
       role,
       username: localStorage.getItem('username') || '',
+      name: localStorage.getItem('userName') || localStorage.getItem('username') || '',
       id: localStorage.getItem('userId') || ''
     };
   } catch (e) {
@@ -54,58 +55,69 @@ function buildSidebar() {
   const nav = document.getElementById('mainNav');
   nav.innerHTML = '';
 
-  // ── Normal navigation items ──────────
+  const isAdmin = currentUser.role === 'admin';
+
+  // ── Navigation items based on role ──────────
   const items = [
     { page: 'pos', label: 'New Sale', icon: 'bi-cart3' },
   ];
 
-  if (currentUser.role === 'admin') {
+  if (isAdmin) {
     items.push({ page: 'pending-payments', label: 'Pending Payments', icon: 'bi-hourglass-split' });
-    items.push({ page: 'reports', label: 'Reports', icon: 'bi-bar-chart' });
+    items.push({ page: 'reports',          label: 'Reports',          icon: 'bi-bar-chart' });
+    items.push({ page: 'products',         label: 'Products',         icon: 'bi-box-seam' });
   }
 
-  items.push({ page: 'products', label: 'Products', icon: 'bi-box-seam' });
-  items.push({ page: 'customers', label: 'Customers', icon: 'bi-person-lines-fill' });
-  items.push({ page: 'sales', label: 'Sales History', icon: 'bi-receipt' });
+  items.push({ page: 'customers', label: 'Customers',     icon: 'bi-person-lines-fill' });
+  items.push({ page: 'sales',     label: 'Sales History', icon: 'bi-receipt' });
 
-  if (currentUser.role === 'admin') {
-    items.push({ page: 'users', label: 'Users', icon: 'bi-people-fill' });
+  if (isAdmin) {
+    items.push({ page: 'users',    label: 'Users',    icon: 'bi-people-fill' });
     items.push({ page: 'settings', label: 'Settings', icon: 'bi-gear' });
   }
 
-  // Add normal items first
+  // User info badge at top of nav
+  const userLi = document.createElement('li');
+  userLi.className = 'nav-item';
+  userLi.style.cssText = 'padding: 10px 16px; margin-bottom:8px; background:rgba(255,255,255,0.06); border-radius:8px; cursor:default;';
+  userLi.innerHTML = `
+    <span style="display:flex;align-items:center;gap:10px;">
+      <span style="width:34px;height:34px;border-radius:50%;background:${isAdmin ? '#2563eb' : '#059669'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0;">${(currentUser.name || currentUser.username || '?')[0].toUpperCase()}</span>
+      <span>
+        <div style="font-weight:600;font-size:0.85rem;color:#f1f5f9;">${currentUser.name || currentUser.username}</div>
+        <div style="font-size:0.72rem;color:${isAdmin ? '#93c5fd' : '#6ee7b7'};text-transform:uppercase;letter-spacing:0.5px;">${isAdmin ? 'Administrator' : 'Staff'}</div>
+      </span>
+    </span>`;
+  nav.appendChild(userLi);
+
+  // Add nav items
   items.forEach(item => {
     const li = document.createElement('li');
     li.className = 'nav-item';
-    li.innerHTML = `<a href="#" data-page="${item.page}"><i class="${item.icon}"></i> ${item.label}</a>`;
+    li.innerHTML = `<a href="#" data-page="${item.page}"><i class="bi ${item.icon}"></i> ${item.label}</a>`;
     nav.appendChild(li);
   });
 
   // ── Logout button (always at the bottom) ──
   const logoutLi = document.createElement('li');
   logoutLi.className = 'nav-item';
-  logoutLi.style.marginTop = 'auto';   // pushes it to the bottom
+  logoutLi.style.marginTop = 'auto';
   logoutLi.innerHTML = `<a href="#" id="logoutBtn" style="color:#ef4444;"><i class="bi bi-box-arrow-right"></i> Logout</a>`;
   nav.appendChild(logoutLi);
 
-  // Attach logout event
   document.getElementById('logoutBtn').addEventListener('click', (e) => {
     e.preventDefault();
     localStorage.clear();
     location.reload();
   });
 
-  // Attach click events for normal page links
   document.querySelectorAll('[data-page]').forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       const page = link.getAttribute('data-page');
-
-      // Auto‑close sidebar on mobile after selecting a page
       if (window.innerWidth <= 768) {
         document.querySelector('.sidebar')?.classList.remove('open');
       }
-
       loadPage(page);
     });
   });
@@ -115,9 +127,10 @@ async function loadPage(page) {
   const main = document.getElementById('page-content');
   main.innerHTML = '';
 
-  // Force redirect if a non‑admin tries to access an admin page
-  const adminPages = ['pending-payments', 'reports', 'users', 'settings'];
+  // Force redirect if a non‑admin tries to access an admin-only page
+  const adminPages = ['pending-payments', 'reports', 'users', 'settings', 'products'];
   if (adminPages.includes(page) && currentUser.role !== 'admin') {
+    Utils.showToast('Access denied. Admin only.', 'danger');
     page = 'pos';
   }
 

@@ -85,6 +85,7 @@ const Login = {
             localStorage.setItem('authToken', data.token);
             localStorage.setItem('userRole', data.role);
             localStorage.setItem('username', data.username);
+            localStorage.setItem('userName', data.name || data.username);
             localStorage.setItem('userId', data.id || '');
             location.reload(); // reload to main app
         } catch (e) {

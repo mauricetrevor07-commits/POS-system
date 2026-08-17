@@ -136,14 +136,15 @@ const Utils = {
     for (let c = 1; c <= copiesCount; c++) {
       const copyLabel = Utils.getCopyName(c);
       const rowsHTML = items.map((it, idx) => {
-        const name = it.productname || it.productName || it.name || 'Item';
-        const qty = parseFloat(it.quantity || it.qty || 1);
-        const price = parseFloat(it.price || 0);
-        const sub = qty * price;
+        const name  = it.productname  || it.productName  || it.name  || it.product_name || 'Item';
+        const sku   = it.barcode      || it.sku           || it.code  || '';
+        const qty   = parseFloat(it.quantity  || it.qty  || 1);
+        const price = parseFloat(it.unit_price || it.price || it.unitprice || 0);
+        const sub   = qty * price;
         return `
           <tr>
             <td class="text-center">${idx + 1}</td>
-            <td><strong>${Utils.escapeHtml(name)}</strong></td>
+            <td><strong>${Utils.escapeHtml(name)}</strong>${sku ? `<div style="font-size:10px;color:#64748b;">${Utils.escapeHtml(sku)}</div>` : ''}</td>
             <td class="text-center">${qty}</td>
             <td class="text-right">KES ${Utils.formatCurrency(price)}</td>
             <td class="text-right">KES ${Utils.formatCurrency(sub)}</td>
@@ -254,14 +255,18 @@ const Utils = {
     for (let c = 1; c <= copiesCount; c++) {
       const copyLabel = Utils.getCopyName(c);
       const rowsHTML = items.map((it, idx) => {
-        const name = it.productname || it.productName || it.name || 'Item';
-        const qty = parseFloat(it.quantity || it.qty || 1);
+        const name  = it.productname  || it.productName  || it.name  || it.product_name || 'Item';
+        const sku   = it.barcode      || it.sku           || it.code  || '';
+        const qty   = parseFloat(it.quantity  || it.qty  || 1);
+        const price = parseFloat(it.unit_price || it.price || it.unitprice || 0);
+        const sub   = qty * price;
         return `
           <tr>
             <td class="text-center">${idx + 1}</td>
-            <td><strong>${Utils.escapeHtml(name)}</strong></td>
-            <td class="text-center"><strong>${qty}</strong></td>
-            <td>Dispatched in good order</td>
+            <td><strong>${Utils.escapeHtml(name)}</strong>${sku ? `<div style="font-size:10px;color:#64748b;">${Utils.escapeHtml(sku)}</div>` : ''}</td>
+            <td class="text-center">${qty}</td>
+            <td class="text-right">KES ${Utils.formatCurrency(price)}</td>
+            <td class="text-right">KES ${Utils.formatCurrency(sub)}</td>
           </tr>
         `;
       }).join('');
@@ -310,15 +315,27 @@ const Utils = {
           <table class="items-table">
             <thead>
               <tr>
-                <th style="width:8%;" class="text-center">#</th>
-                <th style="width:52%;">Item Description / Specification</th>
-                <th style="width:20%;" class="text-center">Quantity Dispatched</th>
-                <th style="width:20%;">Condition / Remarks</th>
+                <th style="width:5%;" class="text-center">#</th>
+                <th style="width:45%;">Item Description / Specification</th>
+                <th style="width:12%;" class="text-center">Qty / Units</th>
+                <th style="width:18%;" class="text-right">Unit Price (KES)</th>
+                <th style="width:20%;" class="text-right">Total Amount (KES)</th>
               </tr>
             </thead>
             <tbody>
-              ${rowsHTML || '<tr><td colspan="4" class="text-center">No items</td></tr>'}
+              ${rowsHTML || '<tr><td colspan="5" class="text-center">No items</td></tr>'}
             </tbody>
+          </table>
+
+          <table class="totals-table">
+            <tr>
+              <td>Total Items:</td>
+              <td class="text-right">${items.length} line(s)</td>
+            </tr>
+            <tr class="grand-total">
+              <td><strong>Grand Total:</strong></td>
+              <td class="text-right"><strong>KES ${Utils.formatCurrency(parseFloat(sale.total || 0))}</strong></td>
+            </tr>
           </table>
 
           <table class="meta-box" style="margin-top:15px;">

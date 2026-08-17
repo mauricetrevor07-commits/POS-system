@@ -5,19 +5,27 @@ const { randomUUID } = require('crypto');
 // Create a connection pool from the Neon DATABASE_URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }   // required for Neon
+  ssl: { rejectUnauthorized: false },   // required for Neon
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+});
+
+// Prevent unhandled errors on idle clients from crashing the Node.js server
+pool.on('error', (err) => {
+  console.warn('Unexpected idle client error on PostgreSQL pool (handled):', err.message);
 });
 
 /**
  * Execute a query and return { rows, rowCount }.
  */
 async function query(text, params) {
-  const client = await pool.connect();
   try {
-    const res = await client.query(text, params);
+    const res = await pool.query(text, params);
     return { rows: res.rows, rowCount: res.rowCount };
-  } finally {
-    client.release();
+  } catch (err) {
+    console.error('DB query failed:', err.message);
+    throw err;
   }
 }
 
@@ -38,19 +46,40 @@ async function init() {
     )
   `);
 
-  // Seed default admin and staff if they don't exist
-  const admin = await query("SELECT id FROM users WHERE username = 'admin'");
+  // Seed default admin, staff, and cashier if they don't exist
+  const admin = await query("SELECT id FROM users WHERE LOWER(username) = 'admin'");
   if (admin.rows.length === 0) {
     const hash = bcrypt.hashSync('admin123', 10);
     await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
       [randomUUID(), 'admin', hash, 'admin', 'Administrator']);
   }
-  const staff = await query("SELECT id FROM users WHERE username = 'staff'");
+  
+  const staff = await query("SELECT id FROM users WHERE LOWER(username) = 'staff'");
   if (staff.rows.length === 0) {
     const hash = bcrypt.hashSync('staff123', 10);
     await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
       [randomUUID(), 'staff', hash, 'staff', 'Staff User']);
+  } else {
+    // Ensure staff has a known password
+    const hash = bcrypt.hashSync('staff123', 10);
+    await query("UPDATE users SET password = $1, role = 'staff' WHERE LOWER(username) = 'staff'", [hash]);
   }
+
+  const cashier = await query("SELECT id FROM users WHERE LOWER(username) = 'cashier'");
+  if (cashier.rows.length === 0) {
+    const hash = bcrypt.hashSync('cashier123', 10);
+    await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
+      [randomUUID(), 'cashier', hash, 'staff', 'Cashier User']);
+  }
+
+  // If Trevor user exists, ensure password is set to staff123
+  try {
+    const trevor = await query("SELECT id FROM users WHERE LOWER(username) = 'trevor'");
+    if (trevor.rows.length > 0) {
+      const hash = bcrypt.hashSync('staff123', 10);
+      await query("UPDATE users SET password = $1, role = 'staff' WHERE LOWER(username) = 'trevor'", [hash]);
+    }
+  } catch (_) {}
 
   // ── Settings ──────────────────────────
   await query(`
