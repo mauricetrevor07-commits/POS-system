@@ -502,25 +502,66 @@ tr:hover td {
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 16px; }
 
-/* ── User Modal (floating card) ───────── */
-.user-modal-overlay {
+/* ── Generic Modal Dialogs ────────────── */
+.modal-overlay {
   position: fixed;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(2px);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 1000;
+  z-index: 1050;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
 }
 
-.user-modal-card {
+.modal-dialog {
   background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  border-radius: 14px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.25);
   max-height: 90vh;
   overflow-y: auto;
+  width: 100%;
+  border: 1px solid var(--border);
+  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-md { max-width: 520px; }
+.modal-lg { max-width: 780px; }
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
+/* ── User & Product Modals ────────────── */
+.user-modal-overlay, .product-modal-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1050;
+  padding: 16px;
+}
+
+.user-modal-card, .product-modal-card {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
 }
 
 /* ── Print Styles ─────────────────────── */

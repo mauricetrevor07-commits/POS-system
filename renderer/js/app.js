@@ -35,8 +35,20 @@ async function initApp() {
   document.getElementById('app-container').style.display = 'flex';
   Sync.init(window.SYNC_SERVER_URL || '');
   buildSidebar();
-  loadPage('pos');
+
+  // Support deep links like #pending-payments from WhatsApp
+  const hash = window.location.hash.replace('#', '').trim();
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetPage = hash || urlParams.get('page') || 'pos';
+  loadPage(targetPage);
 }
+
+window.addEventListener('hashchange', () => {
+  const hash = window.location.hash.replace('#', '').trim();
+  if (hash && currentUser) {
+    loadPage(hash);
+  }
+});
 
 function buildSidebar() {
   const nav = document.getElementById('mainNav');

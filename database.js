@@ -88,10 +88,14 @@ async function init() {
       phone TEXT,
       email TEXT,
       address TEXT,
+      kra_pin TEXT,
+      security_pin TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  try { await query("ALTER TABLE customers ADD COLUMN IF NOT EXISTS kra_pin TEXT"); } catch (_) {}
+  try { await query("ALTER TABLE customers ADD COLUMN IF NOT EXISTS security_pin TEXT"); } catch (_) {}
 
   // ── Customer Prices ───────────────────
   await query(`

@@ -221,6 +221,49 @@ app.delete('/api/products/:id', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Import Stock in Bulk (Adds to existing stock) ──
+app.post('/api/products/import-stock', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || !items.length) {
+      return res.status(400).json({ error: 'No items provided for stock import' });
+    }
+
+    let updatedCount = 0;
+    let totalStockAdded = 0;
+
+    for (const item of items) {
+      const addStock = parseFloat(item.stock_to_add ?? item.add_stock ?? item.quantity ?? 0);
+      if (isNaN(addStock) || addStock <= 0) continue;
+
+      let result;
+      if (item.id) {
+        result = await db.query(
+          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2 RETURNING id',
+          [addStock, item.id]
+        );
+      } else if (item.barcode) {
+        result = await db.query(
+          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE barcode = $2 RETURNING id',
+          [addStock, item.barcode]
+        );
+      } else if (item.name) {
+        result = await db.query(
+          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE LOWER(name) = LOWER($2) RETURNING id',
+          [addStock, item.name.trim()]
+        );
+      }
+
+      if (result && result.rowCount > 0) {
+        updatedCount++;
+        totalStockAdded += addStock;
+      }
+    }
+
+    res.json({ success: true, updatedCount, totalStockAdded });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Customers ─────────────────────────
 app.get('/api/customers', authMiddleware, async (req, res) => {
   try {
@@ -240,10 +283,10 @@ app.get('/api/customers/:id', authMiddleware, async (req, res) => {
 app.post('/api/customers', authMiddleware, async (req, res) => {
   try {
     const id = randomUUID();
-    const { name, contact_person, phone, email, address } = req.body;
+    const { name, contact_person, phone, email, address, kra_pin, security_pin } = req.body;
     await db.query(
-      `INSERT INTO customers (id, name, contact_person, phone, email, address) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, name, contact_person || null, phone || null, email || null, address || null]
+      `INSERT INTO customers (id, name, contact_person, phone, email, address, kra_pin, security_pin) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [id, name, contact_person || null, phone || null, email || null, address || null, kra_pin || null, security_pin || null]
     );
     res.status(201).json({ id, ...req.body });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -251,7 +294,7 @@ app.post('/api/customers', authMiddleware, async (req, res) => {
 
 app.put('/api/customers/:id', authMiddleware, async (req, res) => {
   try {
-    const allowed = ['name','contact_person','phone','email','address'];
+    const allowed = ['name','contact_person','phone','email','address','kra_pin','security_pin'];
     const data = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
     if (Object.keys(data).length) {
@@ -410,13 +453,60 @@ app.get('/api/sales', authMiddleware, async (req, res) => {
 app.get('/api/reports/sales-summary', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { from, to } = req.query;
-    let sql = `SELECT COUNT(*)::int AS total_sales, COALESCE(SUM(total),0) AS total_amount FROM sales WHERE payment_status = 'approved'`;
-    const params = [];
+
+    // Base summary (sales count, total amount)
+    let summarySql = `SELECT COUNT(*)::int AS total_sales, COALESCE(SUM(total),0) AS total_amount FROM sales WHERE payment_status = 'approved'`;
+    const summaryParams = [];
     let idx = 0;
-    if (from) { idx++; sql += ` AND timestamp >= $${idx}`; params.push(from); }
-    if (to)   { idx++; sql += ` AND timestamp <= $${idx}`; params.push(to); }
-    const result = await db.query(sql, params);
-    res.json(result.rows[0]);
+    if (from) { idx++; summarySql += ` AND timestamp >= $${idx}`; summaryParams.push(from + ' 00:00:00'); }
+    if (to)   { idx++; summarySql += ` AND timestamp <= $${idx}`; summaryParams.push(to + ' 23:59:59'); }
+    const summaryResult = await db.query(summarySql, summaryParams);
+
+    // Products sold breakdown
+    let itemsSql = `
+      SELECT 
+        si.productid,
+        si.productname,
+        COALESCE(p.category, 'General') AS category,
+        SUM(si.quantity)::real AS quantity_sold,
+        SUM(si.quantity * si.price)::real AS total_revenue,
+        AVG(si.price)::real AS avg_price
+      FROM sale_items si
+      JOIN sales s ON si.saleid = s.id
+      LEFT JOIN products p ON si.productid = p.id
+      WHERE s.payment_status = 'approved'
+    `;
+    const itemsParams = [];
+    let itemIdx = 0;
+    if (from) { itemIdx++; itemsSql += ` AND s.timestamp >= $${itemIdx}`; itemsParams.push(from + ' 00:00:00'); }
+    if (to)   { itemIdx++; itemsSql += ` AND s.timestamp <= $${itemIdx}`; itemsParams.push(to + ' 23:59:59'); }
+    itemsSql += ` GROUP BY si.productid, si.productname, p.category ORDER BY quantity_sold DESC`;
+    const itemsResult = await db.query(itemsSql, itemsParams);
+
+    // Calculate total pipes sold
+    let totalPipesSold = 0;
+    let totalSacksSold = 0;
+    for (const item of itemsResult.rows) {
+      const cat = (item.category || '').toLowerCase();
+      const name = (item.productname || '').toLowerCase();
+      if (cat.includes('pipe') || name.includes('pipe') || cat.includes('hdpe')) {
+        totalPipesSold += parseFloat(item.quantity_sold) || 0;
+      } else if (cat.includes('sack') || name.includes('sack')) {
+        totalSacksSold += parseFloat(item.quantity_sold) || 0;
+      }
+    }
+
+    // Stock remaining for all products
+    const stockResult = await db.query('SELECT id, name, category, price, stock FROM products ORDER BY category, name');
+
+    res.json({
+      total_sales: summaryResult.rows[0]?.total_sales || 0,
+      total_amount: summaryResult.rows[0]?.total_amount || 0,
+      total_pipes_sold: totalPipesSold,
+      total_sacks_sold: totalSacksSold,
+      products_sold: itemsResult.rows,
+      stock_remaining: stockResult.rows
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
