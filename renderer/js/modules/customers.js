@@ -40,9 +40,77 @@ const Customers = {
     }
   },
 
-  togglePinReveal(id) {
-    this.revealedPins[id] = !this.revealedPins[id];
-    this.filter();
+  // Show PIN verification dialog before revealing sensitive data
+  showPinVerifyDialog(id) {
+    const customer = this.allCustomers.find(c => c.id === id);
+    if (!customer) return;
+
+    // If already revealed, just hide immediately
+    if (this.revealedPins[id]) {
+      this.revealedPins[id] = false;
+      this.filter();
+      return;
+    }
+
+    // If customer has no security PIN set, reveal directly
+    if (!customer.security_pin) {
+      this.revealedPins[id] = true;
+      this.filter();
+      return;
+    }
+
+    const content = `
+      <div style="padding:10px 0;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+          <span style="width:44px;height:44px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-shield-lock" style="font-size:1.3rem;color:#d97706;"></i>
+          </span>
+          <div>
+            <div style="font-weight:700;font-size:0.95rem;color:#1e293b;">${Utils.escapeHtml(customer.name)}</div>
+            <div style="font-size:0.8rem;color:#64748b;">Enter the customer's Security PIN to view their sensitive data (KRA PIN).</div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="font-weight:600;display:block;margin-bottom:6px;">Customer Security PIN</label>
+          <input id="pinVerifyInput" type="password" class="form-control" placeholder="Enter Security PIN" autocomplete="off"
+            style="font-size:1.3rem;letter-spacing:4px;text-align:center;"
+            oninput="document.getElementById('pinVerifyError').textContent=''"
+          />
+          <p id="pinVerifyError" style="color:#ef4444;font-size:0.82rem;margin-top:6px;min-height:18px;"></p>
+        </div>
+      </div>
+    `;
+
+    const { close } = Utils.showModal({
+      title: '<i class="bi bi-shield-lock"></i> PIN Verification Required',
+      content,
+      footer: `
+        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
+        <button class="btn btn-primary" id="pinVerifySubmit"><i class="bi bi-unlock"></i> Verify & Reveal</button>
+      `
+    });
+
+    // Focus the PIN field
+    setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 100);
+
+    const verify = () => {
+      const entered = document.getElementById('pinVerifyInput')?.value || '';
+      if (entered === customer.security_pin) {
+        this.revealedPins[id] = true;
+        close();
+        this.filter();
+        Utils.showToast('Sensitive data revealed. Remember to lock when done.', 'warning');
+      } else {
+        document.getElementById('pinVerifyError').textContent = 'Incorrect PIN. Please try again.';
+        document.getElementById('pinVerifyInput').value = '';
+        document.getElementById('pinVerifyInput').focus();
+      }
+    };
+
+    document.getElementById('pinVerifySubmit')?.addEventListener('click', verify);
+    document.getElementById('pinVerifyInput')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') verify();
+    });
   },
 
   filter() {
@@ -84,8 +152,11 @@ const Customers = {
             <div style="display:flex; align-items:center; gap:8px;">
               <span>${kraDisplay}</span>
               ${(c.kra_pin || c.security_pin) ? `
-                <button class="btn btn-xs btn-outline" onclick="Customers.togglePinReveal('${c.id}')" title="${isRevealed ? 'Hide sensitive data' : 'Reveal KRA / Security PIN'}">
-                  <i class="bi bi-${isRevealed ? 'eye-slash' : 'eye'}"></i>
+                <button class="btn btn-xs ${isRevealed ? 'btn-warning' : 'btn-outline'}" 
+                  onclick="Customers.showPinVerifyDialog('${c.id}')" 
+                  title="${isRevealed ? 'Click to lock sensitive data' : 'Enter PIN to reveal sensitive data'}">
+                  <i class="bi bi-${isRevealed ? 'lock-fill' : 'eye'}"></i>
+                  ${isRevealed ? 'Lock' : 'Reveal'}
                 </button>
               ` : ''}
             </div>
