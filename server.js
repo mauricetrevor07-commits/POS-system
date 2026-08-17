@@ -59,31 +59,33 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // ─── Location Check for Staff ─────────────────
-    if (user.rows[0].role === 'staff') {
+    // ─── Optional IP Restriction (only when ENABLE_IP_RESTRICTION=true) ───
+    // Disabled by default so the system works on Render and remote deployments.
+    // Set ENABLE_IP_RESTRICTION=true and BRANCH_ALLOWED_IPS=x.x.x.x in .env
+    // to restrict staff logins to specific network IPs.
+    if (process.env.ENABLE_IP_RESTRICTION === 'true' && user.rows[0].role === 'staff') {
       let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
                      req.socket.remoteAddress || '';
 
-      if (clientIp.startsWith('::ffff:')) {
-        clientIp = clientIp.substring(7);
-      }
+      if (clientIp.startsWith('::ffff:')) clientIp = clientIp.substring(7);
 
-      const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' || clientIp === 'localhost' || clientIp === '' ||
-                      clientIp.startsWith('192.168.') || clientIp.startsWith('10.') || clientIp.startsWith('172.');
+      const allowedIPs = (process.env.BRANCH_ALLOWED_IPS || '')
+                          .split(',')
+                          .map(ip => ip.trim().replace(/^::ffff:/, ''))
+                          .filter(Boolean);
 
-      if (process.env.BRANCH_ALLOWED_IPS && !isLocal) {
-        const allowedIPs = process.env.BRANCH_ALLOWED_IPS
-                            .split(',')
-                            .map(ip => ip.trim().replace(/^::ffff:/, ''));
+      const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' ||
+                      clientIp === 'localhost'  || clientIp === '' ||
+                      clientIp.startsWith('192.168.') || clientIp.startsWith('10.') ||
+                      clientIp.startsWith('172.');
 
-        if (!allowedIPs.includes(clientIp)) {
-          return res.status(403).json({
-            error: `Access denied from IP ${clientIp}. You must be at the branch location to log in.`
-          });
-        }
+      if (!isLocal && allowedIPs.length && !allowedIPs.includes(clientIp)) {
+        return res.status(403).json({
+          error: `Access denied. Your IP (${clientIp}) is not permitted at this branch.`
+        });
       }
     }
-    // ─────────────────────────────────────────────
+    // ──────────────────────────────────────────────────────────────────────
 
     const token = jwt.sign(
       { id: user.rows[0].id, username: user.rows[0].username, role: user.rows[0].role },
@@ -96,6 +98,7 @@ app.post('/api/login', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 
 // ─── Users (Admin Only) ────────────────
 app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
