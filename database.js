@@ -94,12 +94,14 @@ async function init() {
       [process.env.DEFAULT_WHATSAPP || '+254700000000']);
   }
 
-  // ── Products ──────────────────────────
+  // ── Products ─────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       price REAL NOT NULL,
+      wholesale_price REAL,
+      distributor_price REAL,
       stock INTEGER DEFAULT 0,
       barcode TEXT,
       category TEXT,
@@ -107,6 +109,8 @@ async function init() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  try { await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS wholesale_price REAL"); } catch (_) {}
+  try { await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS distributor_price REAL"); } catch (_) {}
 
   // ── Customers ─────────────────────────
   await query(`
@@ -117,6 +121,7 @@ async function init() {
       phone TEXT,
       email TEXT,
       address TEXT,
+      customer_type TEXT DEFAULT 'retailer',
       kra_pin TEXT,
       security_pin TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -125,6 +130,7 @@ async function init() {
   `);
   try { await query("ALTER TABLE customers ADD COLUMN IF NOT EXISTS kra_pin TEXT"); } catch (_) {}
   try { await query("ALTER TABLE customers ADD COLUMN IF NOT EXISTS security_pin TEXT"); } catch (_) {}
+  try { await query("ALTER TABLE customers ADD COLUMN IF NOT EXISTS customer_type TEXT DEFAULT 'retailer'"); } catch (_) {}
 
   // ── Customer Prices ───────────────────
   await query(`
@@ -144,6 +150,9 @@ async function init() {
       branch_id INTEGER NOT NULL,
       customer_id TEXT REFERENCES customers(id),
       timestamp TIMESTAMPTZ DEFAULT NOW(),
+      subtotal REAL,
+      vat_rate REAL DEFAULT 0.16,
+      vat_amount REAL DEFAULT 0,
       total REAL NOT NULL,
       paymentMethod TEXT DEFAULT 'mobile_money',
       payment_reference TEXT,
@@ -155,6 +164,9 @@ async function init() {
       created_by TEXT
     )
   `);
+  try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS subtotal REAL"); } catch (_) {}
+  try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS vat_rate REAL DEFAULT 0.16"); } catch (_) {}
+  try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS vat_amount REAL DEFAULT 0"); } catch (_) {}
 
   // ── Sale Items ────────────────────────
   await query(`

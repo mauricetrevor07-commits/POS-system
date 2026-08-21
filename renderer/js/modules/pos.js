@@ -2,8 +2,10 @@ const POS = {
   cart: [],
   selectedCustomer: null,
   products: [],
+  customers: [],
   selectedCategory: 'all',
   searchQuery: '',
+  isVatEnabled: true,
 
   async render() {
     const container = document.getElementById('page-content');
@@ -37,27 +39,52 @@ const POS = {
                 <input type="text" id="searchProducts" class="form-control" placeholder="Search product by name, barcode, or category..." oninput="POS.search()" />
               </div>
             </div>
-            <div class="card-body" id="productGrid" style="max-height:520px; overflow-y:auto;">
+            <div class="card-body" id="productGrid" style="max-height:540px; overflow-y:auto;">
               <div class="loading-spinner"></div>
             </div>
           </div>
         </div>
 
-        <div style="flex:1; min-width:320px;">
+        <div style="flex:1; min-width:330px;">
           <div class="card" style="box-shadow:var(--shadow-md);">
-            <div class="card-header" style="background:#f8fafc;">
-              <label style="font-weight:600; font-size:0.9rem; margin-bottom:4px; display:block;">Select Customer</label>
+            <div class="card-header" style="background:#f8fafc; padding:14px 16px;">
+              <label style="font-weight:600; font-size:0.85rem; margin-bottom:4px; display:block;">Select Customer (Pricing Tier)</label>
               <select id="customerSelect" class="form-control" onchange="POS.selectCustomer()">
-                <option value="">Walk‑in Customer</option>
+                <option value="">Walk‑in Customer [RETAIL]</option>
               </select>
+              <div id="customerTierBadge" style="margin-top:6px; min-height:20px;"></div>
             </div>
             <div class="card-body" id="cartSection" style="padding:16px;">
               <div style="font-weight:600; font-size:0.85rem; color:#64748b; margin-bottom:8px; text-transform:uppercase;">Current Order</div>
-              <div id="cartItems" style="min-height:120px; max-height:220px; overflow-y:auto; margin-bottom:12px;"></div>
+              <div id="cartItems" style="min-height:100px; max-height:190px; overflow-y:auto; margin-bottom:12px;"></div>
               
-              <div style="border-top:1.5px solid var(--border); padding-top:10px; margin-bottom:14px;">
-                <div style="display:flex; justify-content:space-between; align-items:center; font-size:1.25rem; font-weight:700; color:var(--primary);">
-                  <span>Total Due:</span>
+              <!-- 16% Value Added Tax (VAT) Selector -->
+              <div style="margin-bottom:12px;">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
+                  Value Added Tax (16% VAT)
+                </label>
+                <div style="display:flex; gap:6px;">
+                  <button id="vatBtnOn" class="btn btn-sm ${this.isVatEnabled ? 'btn-primary' : 'btn-outline'}" style="flex:1; font-size:0.8rem;" onclick="POS.setVat(true)">
+                    <i class="bi bi-check-circle-fill"></i> With VAT (16%)
+                  </button>
+                  <button id="vatBtnOff" class="btn btn-sm ${!this.isVatEnabled ? 'btn-primary' : 'btn-outline'}" style="flex:1; font-size:0.8rem;" onclick="POS.setVat(false)">
+                    <i class="bi bi-dash-circle"></i> Without VAT (0%)
+                  </button>
+                </div>
+              </div>
+
+              <!-- Cart Summary Breakdown -->
+              <div style="background:#f8fafc; border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:14px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#64748b; margin-bottom:4px;">
+                  <span>Subtotal (Excl. VAT):</span>
+                  <span>KES <span id="cartSubtotal">0.00</span></span>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#0284c7; margin-bottom:6px;">
+                  <span id="vatLabelText">VAT (16%):</span>
+                  <span>KES <span id="cartVat">0.00</span></span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:1.15rem; font-weight:700; color:var(--primary); border-top:1px dashed #cbd5e1; padding-top:6px;">
+                  <span>Grand Total:</span>
                   <span>KES <span id="cartTotal">0.00</span></span>
                 </div>
               </div>
@@ -93,9 +120,28 @@ const POS = {
     this.updateCartDisplay();
   },
 
+  setVat(enabled) {
+    this.isVatEnabled = enabled;
+    const btnOn = document.getElementById('vatBtnOn');
+    const btnOff = document.getElementById('vatBtnOff');
+    if (btnOn && btnOff) {
+      if (enabled) {
+        btnOn.className = 'btn btn-sm btn-primary';
+        btnOff.className = 'btn btn-sm btn-outline';
+      } else {
+        btnOn.className = 'btn btn-sm btn-outline';
+        btnOff.className = 'btn btn-sm btn-primary';
+      }
+    }
+    const vatLabel = document.getElementById('vatLabelText');
+    if (vatLabel) {
+      vatLabel.textContent = enabled ? 'VAT (16%):' : 'VAT (0% Exempt):';
+    }
+    this.updateCartDisplay();
+  },
+
   setCategory(cat) {
     this.selectedCategory = cat;
-    // update button styles
     const bar = document.getElementById('posCategoryBar');
     if (bar) {
       bar.querySelectorAll('button').forEach(btn => {
@@ -121,12 +167,23 @@ const POS = {
     }
   },
 
+  getItemUnitPrice(p) {
+    const cust = this.customers.find(c => c.id === this.selectedCustomer);
+    const tier = (cust?.customer_type || 'retailer').toLowerCase();
+    if (tier === 'distributor' && p.distributor_price !== null && p.distributor_price !== undefined && p.distributor_price !== '') {
+      return parseFloat(p.distributor_price);
+    }
+    if (tier === 'wholesaler' && p.wholesale_price !== null && p.wholesale_price !== undefined && p.wholesale_price !== '') {
+      return parseFloat(p.wholesale_price);
+    }
+    return parseFloat(p.price || 0);
+  },
+
   filterAndRenderProducts() {
     const query = this.searchQuery;
     const cat = this.selectedCategory;
 
     const filtered = this.products.filter(p => {
-      // Category match
       const pCat = (p.category || '').toLowerCase();
       const pName = (p.name || '').toLowerCase();
       
@@ -141,11 +198,13 @@ const POS = {
 
       if (!matchesCat) return false;
 
-      // Text match
       if (!query) return true;
       const barcode = (p.barcode || '').toLowerCase();
       return pName.includes(query) || pCat.includes(query) || barcode.includes(query);
     });
+
+    const cust = this.customers.find(c => c.id === this.selectedCustomer);
+    const tier = (cust?.customer_type || 'retailer').toLowerCase();
 
     const html = filtered.map(p => {
       const pCat = (p.category || '').toLowerCase();
@@ -157,13 +216,21 @@ const POS = {
       const btnLabel = isCuttable ? 'Add Length (m)' : (isBundle ? 'Add Sacks' : 'Add to Order');
       const icon = isCuttable ? '🌊' : (pCat.includes('sack') ? '📦' : '🛍️');
 
+      const unitPrice = this.getItemUnitPrice(p);
+      let tierNote = '';
+      if (tier === 'distributor' && p.distributor_price) {
+        tierNote = '<span style="font-size:0.7rem; color:#7c3aed; font-weight:600;">(Distributor Tier)</span>';
+      } else if (tier === 'wholesaler' && p.wholesale_price) {
+        tierNote = '<span style="font-size:0.7rem; color:#0284c7; font-weight:600;">(Wholesale Tier)</span>';
+      }
+
       return `
         <div class="product-card">
           <div>
             <div style="font-size:2rem; margin-bottom:6px;">${icon}</div>
             <h4 style="margin-bottom:4px; font-size:1rem;">${Utils.escapeHtml(p.name)}</h4>
             <div style="font-size:0.75rem; color:#64748b; margin-bottom:8px;">${Utils.escapeHtml(p.category || 'General')}</div>
-            <div class="price">KES ${Utils.formatCurrency(p.price)}</div>
+            <div class="price">KES ${Utils.formatCurrency(unitPrice)} ${tierNote}</div>
             <div class="stock" style="${p.stock <= 5 ? 'color:#ef4444; font-weight:600;' : ''}">
               Stock: ${p.stock} ${isCuttable ? 'm' : 'units'}
             </div>
@@ -192,13 +259,15 @@ const POS = {
   async loadCustomers() {
     try {
       const customers = await DB._fetch('/api/customers');
-      this.customers = customers;
+      this.customers = customers || [];
       const sel = document.getElementById('customerSelect');
       if (!sel) return;
-      customers.forEach(c => {
+      sel.innerHTML = '<option value="">Walk‑in Customer [RETAIL]</option>';
+      this.customers.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
-        opt.textContent = `${c.name} ${c.kra_pin ? '(' + c.kra_pin + ')' : ''}`;
+        const tier = (c.customer_type || 'retailer').toUpperCase();
+        opt.textContent = `${c.name} [${tier}] ${c.kra_pin ? '(' + c.kra_pin + ')' : ''}`;
         sel.appendChild(opt);
       });
     } catch (e) {}
@@ -206,6 +275,33 @@ const POS = {
 
   selectCustomer() {
     this.selectedCustomer = document.getElementById('customerSelect')?.value || null;
+    const cust = this.customers.find(c => c.id === this.selectedCustomer);
+    const tierBadge = document.getElementById('customerTierBadge');
+    if (tierBadge) {
+      if (!cust) {
+        tierBadge.innerHTML = '<span class="badge badge-secondary" style="font-size:0.75rem;">Standard Retail Pricing</span>';
+      } else {
+        const tier = (cust.customer_type || 'retailer').toLowerCase();
+        if (tier === 'distributor') {
+          tierBadge.innerHTML = '<span class="badge" style="background:#ede9fe; color:#7c3aed; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Distributor Pricing Active</span>';
+        } else if (tier === 'wholesaler') {
+          tierBadge.innerHTML = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Wholesale Pricing Active</span>';
+        } else {
+          tierBadge.innerHTML = '<span class="badge badge-secondary" style="font-size:0.75rem;">Retail Pricing Active</span>';
+        }
+      }
+    }
+
+    // Refresh cart item prices with the customer's tier pricing
+    this.cart.forEach(item => {
+      const p = this.products.find(prod => prod.id === item.productId);
+      if (p) {
+        item.price = this.getItemUnitPrice(p);
+      }
+    });
+
+    this.filterAndRenderProducts();
+    this.updateCartDisplay();
   },
 
   addToCart(id, qtyOverride) {
@@ -216,30 +312,38 @@ const POS = {
       ? qtyOverride
       : (isCuttable ? parseFloat(document.getElementById(`cut-${id}`)?.value) || 1 : 1);
 
+    const unitPrice = this.getItemUnitPrice(p);
+
     const exist = this.cart.find(i => i.productId === id);
     if (exist) {
       exist.quantity += quantity;
+      exist.price = unitPrice;
     } else {
-      this.cart.push({ productId: id, name: p.name, price: p.price, quantity });
+      this.cart.push({ productId: id, name: p.name, price: unitPrice, quantity });
     }
     this.updateCartDisplay();
   },
 
   updateCartDisplay() {
     const itemsEl = document.getElementById('cartItems');
+    const subtotalEl = document.getElementById('cartSubtotal');
+    const vatEl = document.getElementById('cartVat');
     const totalEl = document.getElementById('cartTotal');
     if (!itemsEl) return;
-    let total = 0;
+    
+    let subtotal = 0;
     
     if (this.cart.length === 0) {
       itemsEl.innerHTML = '<p style="color:#94a3b8; text-align:center; padding:20px 0; font-size:0.9rem;">Cart is empty. Select items to add.</p>';
+      if (subtotalEl) subtotalEl.textContent = '0.00';
+      if (vatEl) vatEl.textContent = '0.00';
       if (totalEl) totalEl.textContent = '0.00';
       return;
     }
 
     itemsEl.innerHTML = this.cart.map((item, idx) => {
       const sub = item.price * item.quantity;
-      total += sub;
+      subtotal += sub;
       return `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f1f5f9;">
           <div style="flex:1; padding-right:8px;">
@@ -251,7 +355,13 @@ const POS = {
         </div>`;
     }).join('');
 
-    if (totalEl) totalEl.textContent = Utils.formatCurrency(total);
+    const vatRate = this.isVatEnabled ? 0.16 : 0;
+    const vatAmount = vatRate > 0 ? Math.round(subtotal * vatRate * 100) / 100 : 0;
+    const grandTotal = Math.round((subtotal + vatAmount) * 100) / 100;
+
+    if (subtotalEl) subtotalEl.textContent = Utils.formatCurrency(subtotal);
+    if (vatEl) vatEl.textContent = Utils.formatCurrency(vatAmount);
+    if (totalEl) totalEl.textContent = Utils.formatCurrency(grandTotal);
   },
 
   removeFromCart(idx) {
@@ -275,6 +385,7 @@ const POS = {
     try {
       const customerObj = this.customers?.find(c => c.id === this.selectedCustomer);
       const customerName = customerObj?.name || 'Walk-in Customer';
+      const vatRate = this.isVatEnabled ? 0.16 : 0;
 
       const sale = await DB._fetch('/api/sales', {
         method: 'POST',
@@ -287,7 +398,8 @@ const POS = {
           })),
           paymentMethod,
           payment_reference: paymentRef,
-          customer_id: this.selectedCustomer || null
+          customer_id: this.selectedCustomer || null,
+          vat_rate: vatRate
         })
       });
 
@@ -313,7 +425,9 @@ const POS = {
         `*Customer:* ${customerName}\n` +
         `*Payment Method:* ${paymentMethod.replace('_', ' ').toUpperCase()}\n` +
         `*Reference No:* ${paymentRef}\n` +
-        `*Total:* KES ${Utils.formatCurrency(sale.total)}\n\n` +
+        `*Subtotal:* KES ${Utils.formatCurrency(sale.subtotal || 0)}\n` +
+        `*VAT (${(sale.vat_rate || 0) * 100}%):* KES ${Utils.formatCurrency(sale.vat_amount || 0)}\n` +
+        `*Grand Total:* KES ${Utils.formatCurrency(sale.total)}\n\n` +
         `*Order Items:*\n${itemsText}\n` +
         `*Approve or Reject Sale Here:*\n${pendingUrl}`
       );
@@ -326,9 +440,13 @@ const POS = {
       const completedSale = {
         id: sale.id,
         timestamp: new Date().toISOString(),
+        subtotal: sale.subtotal,
+        vat_rate: sale.vat_rate,
+        vat_amount: sale.vat_amount,
         total: sale.total,
         paymentMethod,
         payment_reference: paymentRef,
+        payment_status: 'pending_payment',
         customer_name: customerName,
         customer_kra_pin: customerObj?.kra_pin,
         customer_address: customerObj?.address,

@@ -104,6 +104,13 @@ const Products = {
       const isPipe = (p.category || '').toLowerCase().includes('pipe');
       const isLow = p.stock <= 5;
       const isOut = p.stock <= 0;
+      const wsPrice = p.wholesale_price !== null && p.wholesale_price !== undefined && p.wholesale_price !== ''
+        ? `KES ${Utils.formatCurrency(p.wholesale_price)}`
+        : `<span style="color:#94a3b8; font-size:0.75rem;">-</span>`;
+      const distPrice = p.distributor_price !== null && p.distributor_price !== undefined && p.distributor_price !== ''
+        ? `KES ${Utils.formatCurrency(p.distributor_price)}`
+        : `<span style="color:#94a3b8; font-size:0.75rem;">-</span>`;
+
       return `
         <tr>
           <td>
@@ -111,7 +118,9 @@ const Products = {
             ${p.barcode ? `<div style="font-size:0.75rem; color:#64748b;">Barcode: ${Utils.escapeHtml(p.barcode)}</div>` : ''}
           </td>
           <td><span class="badge badge-secondary">${Utils.escapeHtml(p.category || 'General')}</span></td>
-          <td style="font-weight:600;">KES ${Utils.formatCurrency(p.price)}</td>
+          <td style="font-weight:600; color:#1e293b;">KES ${Utils.formatCurrency(p.price)}</td>
+          <td style="color:#0284c7; font-weight:500;">${wsPrice}</td>
+          <td style="color:#7c3aed; font-weight:500;">${distPrice}</td>
           <td>
             <span class="badge ${isOut ? 'badge-danger' : isLow ? 'badge-warning' : 'badge-success'}" style="${isOut ? 'background:rgba(239,68,68,0.15); color:#ef4444;' : isLow ? 'background:rgba(245,158,11,0.15); color:#d97706;' : ''}">
               ${p.stock} ${isPipe ? 'meters' : 'units'}
@@ -130,12 +139,14 @@ const Products = {
           <tr>
             <th>Product Description</th>
             <th>Category</th>
-            <th>Unit Price</th>
+            <th>Retail Price</th>
+            <th>Wholesale Price</th>
+            <th>Distributor Price</th>
             <th>Current Stock</th>
             <th class="text-right">Actions</th>
           </tr>
         </thead>
-        <tbody>${html || '<tr><td colspan="5" class="text-center" style="padding:24px; color:#64748b;">No products matching filter</td></tr>'}</tbody>
+        <tbody>${html || '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No products matching filter</td></tr>'}</tbody>
       </table>`;
   },
 
@@ -147,7 +158,7 @@ const Products = {
 
     const html = `
       <div class="product-modal-overlay" onclick="if(event.target===this) this.remove()">
-        <div class="product-modal-card" style="max-width: 480px; width: 90%;">
+        <div class="product-modal-card" style="max-width: 520px; width: 90%;">
           <div class="modal-header">
             <h3>${product ? 'Edit Product' : 'Add New Product'}</h3>
             <button class="close-btn" onclick="document.querySelector('.product-modal-overlay').remove()">&times;</button>
@@ -167,19 +178,40 @@ const Products = {
                 <option value="General" ${(!product?.category || product?.category === 'General') ? 'selected' : ''}>General</option>
               </select>
             </div>
-            <div style="display:flex; gap:12px; margin-bottom:12px;">
-              <div class="form-group" style="flex:1;">
-                <label style="font-weight:600; margin-bottom:4px; display:block;">Unit Price (KES) *</label>
-                <input type="number" step="0.01" id="prodPrice" class="form-control" value="${product?.price || ''}" placeholder="0.00">
+            
+            <!-- Tiered Pricing Section -->
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+              <div style="font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:8px; text-transform:uppercase;">
+                <i class="bi bi-tags"></i> Tiered Category Pricing (KES)
               </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+                <div class="form-group">
+                  <label style="font-size:0.75rem; font-weight:600; color:#1e293b; display:block; margin-bottom:4px;">Retail / Standard *</label>
+                  <input type="number" step="0.01" id="prodPrice" class="form-control" value="${product?.price ?? ''}" placeholder="0.00">
+                </div>
+                <div class="form-group">
+                  <label style="font-size:0.75rem; font-weight:600; color:#0284c7; display:block; margin-bottom:4px;">Wholesale Price</label>
+                  <input type="number" step="0.01" id="prodWholesalePrice" class="form-control" value="${product?.wholesale_price ?? ''}" placeholder="Optional">
+                </div>
+                <div class="form-group">
+                  <label style="font-size:0.75rem; font-weight:600; color:#7c3aed; display:block; margin-bottom:4px;">Distributor Price</label>
+                  <input type="number" step="0.01" id="prodDistributorPrice" class="form-control" value="${product?.distributor_price ?? ''}" placeholder="Optional">
+                </div>
+              </div>
+              <div style="font-size:0.7rem; color:#64748b; margin-top:4px;">
+                Prices automatically apply in POS when a customer with that tier is selected.
+              </div>
+            </div>
+
+            <div style="display:flex; gap:12px; margin-bottom:12px;">
               <div class="form-group" style="flex:1;">
                 <label style="font-weight:600; margin-bottom:4px; display:block;">Current Stock</label>
                 <input type="number" id="prodStock" class="form-control" value="${product?.stock || 0}" placeholder="0">
               </div>
-            </div>
-            <div class="form-group">
-              <label style="font-weight:600; margin-bottom:4px; display:block;">Barcode (Optional)</label>
-              <input type="text" id="prodBarcode" class="form-control" value="${product?.barcode || ''}" placeholder="Scan or enter barcode">
+              <div class="form-group" style="flex:1;">
+                <label style="font-weight:600; margin-bottom:4px; display:block;">Barcode (Optional)</label>
+                <input type="text" id="prodBarcode" class="form-control" value="${product?.barcode || ''}" placeholder="Scan or enter barcode">
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -195,15 +227,19 @@ const Products = {
 
   async saveProduct() {
     const id = document.getElementById('productId')?.value;
+    const wsVal = document.getElementById('prodWholesalePrice')?.value;
+    const distVal = document.getElementById('prodDistributorPrice')?.value;
     const data = {
       name: document.getElementById('prodName')?.value.trim(),
       price: parseFloat(document.getElementById('prodPrice')?.value),
+      wholesale_price: wsVal !== '' && wsVal !== null ? parseFloat(wsVal) : null,
+      distributor_price: distVal !== '' && distVal !== null ? parseFloat(distVal) : null,
       stock: parseInt(document.getElementById('prodStock')?.value, 10) || 0,
       barcode: document.getElementById('prodBarcode')?.value.trim(),
       category: document.getElementById('prodCategory')?.value.trim()
     };
 
-    if (!data.name || isNaN(data.price)) return Utils.toast('Name and Price are required', 'error');
+    if (!data.name || isNaN(data.price)) return Utils.toast('Name and Retail Price are required', 'error');
 
     try {
       if (id) {

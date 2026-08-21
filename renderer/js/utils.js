@@ -124,14 +124,160 @@ const Utils = {
 
   generateInvoiceHTML(sale, copiesCount = 1) {
     let fullHTML = '';
-    const items = sale.items || [];
+    let items = sale.items || [];
+    if (typeof items === 'string') {
+      try { items = JSON.parse(items); } catch (_) { items = []; }
+    }
     const invoiceNum = `INV-${(sale.id || '').slice(0, 8).toUpperCase()}`;
     const dateStr = new Date(sale.timestamp || Date.now()).toLocaleString();
     const customerName = sale.customer_name || sale.customerName || 'Walk-in Customer';
     const customerKRA = sale.kra_pin || sale.customer_kra_pin || 'N/A';
     const paymentMethod = (sale.paymentMethod || sale.paymentmethod || 'Mobile Money').replace('_', ' ').toUpperCase();
     const paymentRef = sale.payment_reference || sale.payment_ref || 'N/A';
-    const totalAmount = parseFloat(sale.total || 0);
+
+    const subtotalAmount = sale.subtotal !== undefined && sale.subtotal !== null
+      ? parseFloat(sale.subtotal)
+      : items.reduce((acc, it) => acc + (parseFloat(it.price || it.unit_price || it.unitprice || 0) * parseFloat(it.quantity || it.qty || 1)), 0);
+
+    const vatRate = sale.vat_rate !== undefined && sale.vat_rate !== null
+      ? parseFloat(sale.vat_rate)
+      : (sale.vat_amount && parseFloat(sale.vat_amount) > 0 ? 0.16 : 0.16);
+
+    const vatAmount = sale.vat_amount !== undefined && sale.vat_amount !== null
+      ? parseFloat(sale.vat_amount)
+      : (vatRate > 0 ? Math.round(subtotalAmount * vatRate * 100) / 100 : 0);
+
+    const totalAmount = parseFloat(sale.total || (subtotalAmount + vatAmount));
+
+    for (let c = 1; c <= copiesCount; c++) {
+      const copyLabel = Utils.getCopyName(c);
+      const rowsHTML = items.map((it, idx) => {
+        const name  = it.productname  || it.productName  || it.name  || it.product_name || 'Item';
+        const sku   = it.barcode      || it.sku           || it.code  || '';
+        const qty   = parseFloat(it.quantity  || it.qty  || 1);
+        const price = parseFloat(it.unit_price || it.price || it.unitprice || 0);
+        const sub   = qty * price;
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td><strong>${Utils.escapeHtml(name)}</strong>${sku ? `<div style="font-size:10px;color:#64748b;">${Utils.escapeHtml(sku)}</div>` : ''}</td>
+            <td class="text-center">${qty}</td>
+            <td class="text-right">KES ${Utils.formatCurrency(price)}</td>
+            <td class="text-right">KES ${Utils.formatCurrency(sub)}</td>
+          </tr>
+        `;
+      }).join('');
+
+      fullHTML += `
+        <div class="doc-container">
+          <table class="header-table">
+            <tr>
+              <td>
+                <div class="company-title">AUTOPAK INTERNATIONAL</div>
+                <div class="company-sub">
+                  Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks<br>
+                  Plot 123, Industrial Area, Nairobi, Kenya | Tel: +254 700 000 000<br>
+                  Email: info@autopak.co.ke | <strong>Company PIN: P051234567Z</strong>
+                </div>
+              </td>
+              <td class="doc-badge">
+                <div class="doc-type">TAX INVOICE</div>
+                <div class="copy-label">${copyLabel}</div>
+              </td>
+            </tr>
+          </table>
+
+          <table class="meta-box">
+            <tr>
+              <td style="width:50%;">
+                <div class="meta-label">Billed To (Customer):</div>
+                <div class="meta-value">${Utils.escapeHtml(customerName)}</div>
+                <div style="font-size:11px; margin-top:3px;">
+                  <strong>Customer KRA PIN:</strong> <span style="font-weight:700; color:#0f172a;">${Utils.escapeHtml(customerKRA !== 'N/A' ? customerKRA : 'N/A (Walk-in)')}</span>
+                </div>
+                ${sale.customer_address ? `<div style="font-size:10px; color:#64748b; margin-top:2px;">Address: ${Utils.escapeHtml(sale.customer_address)}</div>` : ''}
+              </td>
+              <td style="width:25%;">
+                <div class="meta-label">Invoice No:</div>
+                <div class="meta-value">${invoiceNum}</div>
+                <div class="meta-label" style="margin-top:6px;">Date & Time:</div>
+                <div class="meta-value" style="font-size:11px;">${dateStr}</div>
+              </td>
+              <td style="width:25%;">
+                <div class="meta-label">Payment Method:</div>
+                <div class="meta-value">${paymentMethod}</div>
+                <div class="meta-label" style="margin-top:6px;">Ref No:</div>
+                <div class="meta-value" style="font-size:11px;">${paymentRef}</div>
+              </td>
+            </tr>
+          </table>
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:5%;" class="text-center">#</th>
+                <th style="width:45%;">Item Description / Specification</th>
+                <th style="width:12%;" class="text-center">Qty / Units</th>
+                <th style="width:18%;" class="text-right">Unit Price</th>
+                <th style="width:20%;" class="text-right">Total Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML || '<tr><td colspan="5" class="text-center">No items</td></tr>'}
+            </tbody>
+          </table>
+
+          <table class="totals-table">
+            <tr>
+              <td>Subtotal (Excl. VAT):</td>
+              <td class="text-right">KES ${Utils.formatCurrency(subtotalAmount)}</td>
+            </tr>
+            <tr>
+              <td>Value Added Tax (${vatRate > 0 ? (vatRate * 100) + '%' : '0% Exempt'}):</td>
+              <td class="text-right">KES ${Utils.formatCurrency(vatAmount)}</td>
+            </tr>
+            <tr class="grand-total">
+              <td><strong>Grand Total (Incl. VAT):</strong></td>
+              <td class="text-right"><strong>KES ${Utils.formatCurrency(totalAmount)}</strong></td>
+            </tr>
+          </table>
+
+          <div class="sign-grid">
+            <div class="sign-box">
+              <strong>Prepared / Dispatched By</strong><br><br>
+              ${Utils.escapeHtml(sale.created_by || 'Cashier / Admin')}
+            </div>
+            <div class="sign-box">
+              <strong>Customer Acknowledged</strong><br><br>
+              Signature & Date
+            </div>
+            <div class="sign-box">
+              <strong>Official Stamp & Seal</strong><br><br>
+              AUTOPAK INTERNATIONAL
+            </div>
+          </div>
+
+          <div class="footer-note">
+            Goods once sold are not returnable without prior authorization. Tax compliant invoice. Thank you for your business!
+          </div>
+        </div>
+        ${c < copiesCount ? '<div class="page-break"></div>' : ''}
+      `;
+    }
+    return fullHTML;
+  },
+
+  generateDeliveryNoteHTML(sale, copiesCount = 1) {
+    let fullHTML = '';
+    let items = sale.items || [];
+    if (typeof items === 'string') {
+      try { items = JSON.parse(items); } catch (_) { items = []; }
+    }
+    const dnNum = `DN-${(sale.id || '').slice(0, 8).toUpperCase()}`;
+    const invoiceNum = `INV-${(sale.id || '').slice(0, 8).toUpperCase()}`;
+    const dateStr = new Date(sale.timestamp || Date.now()).toLocaleString();
+    const customerName = sale.customer_name || sale.customerName || 'Walk-in Customer';
+    const customerKRA = sale.kra_pin || sale.customer_kra_pin || 'N/A';
 
     for (let c = 1; c <= copiesCount; c++) {
       const copyLabel = Utils.getCopyName(c);
@@ -165,125 +311,6 @@ const Utils = {
                 </div>
               </td>
               <td class="doc-badge">
-                <div class="doc-type">TAX INVOICE</div>
-                <div class="copy-label">${copyLabel}</div>
-              </td>
-            </tr>
-          </table>
-
-          <table class="meta-box">
-            <tr>
-              <td style="width:50%;">
-                <div class="meta-label">Billed To (Customer):</div>
-                <div class="meta-value">${Utils.escapeHtml(customerName)}</div>
-                ${customerKRA !== 'N/A' ? `<div style="font-size:11px; margin-top:2px;"><strong>KRA PIN:</strong> ${Utils.escapeHtml(customerKRA)}</div>` : ''}
-              </td>
-              <td style="width:25%;">
-                <div class="meta-label">Invoice No:</div>
-                <div class="meta-value">${invoiceNum}</div>
-                <div class="meta-label" style="margin-top:6px;">Date & Time:</div>
-                <div class="meta-value" style="font-size:11px;">${dateStr}</div>
-              </td>
-              <td style="width:25%;">
-                <div class="meta-label">Payment Method:</div>
-                <div class="meta-value">${paymentMethod}</div>
-                <div class="meta-label" style="margin-top:6px;">Ref No:</div>
-                <div class="meta-value" style="font-size:11px;">${paymentRef}</div>
-              </td>
-            </tr>
-          </table>
-
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th style="width:5%;" class="text-center">#</th>
-                <th style="width:45%;">Item Description</th>
-                <th style="width:15%;" class="text-center">Qty / Meters</th>
-                <th style="width:15%;" class="text-right">Unit Price</th>
-                <th style="width:20%;" class="text-right">Total Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHTML || '<tr><td colspan="5" class="text-center">No items</td></tr>'}
-            </tbody>
-          </table>
-
-          <table class="totals-table">
-            <tr>
-              <td>Subtotal:</td>
-              <td class="text-right">KES ${Utils.formatCurrency(totalAmount)}</td>
-            </tr>
-            <tr class="grand-total">
-              <td><strong>Grand Total:</strong></td>
-              <td class="text-right"><strong>KES ${Utils.formatCurrency(totalAmount)}</strong></td>
-            </tr>
-          </table>
-
-          <div class="sign-grid">
-            <div class="sign-box">
-              <strong>Prepared / Dispatched By</strong><br><br>
-              ${Utils.escapeHtml(sale.created_by || 'Cashier / Admin')}
-            </div>
-            <div class="sign-box">
-              <strong>Customer Acknowledged</strong><br><br>
-              Signature & Date
-            </div>
-            <div class="sign-box">
-              <strong>Official Stamp & Seal</strong><br><br>
-              AUTOPAK INTERNATIONAL
-            </div>
-          </div>
-
-          <div class="footer-note">
-            Goods once sold are not returnable without prior authorization. Thank you for your business!
-          </div>
-        </div>
-        ${c < copiesCount ? '<div class="page-break"></div>' : ''}
-      `;
-    }
-    return fullHTML;
-  },
-
-  generateDeliveryNoteHTML(sale, copiesCount = 1) {
-    let fullHTML = '';
-    const items = sale.items || [];
-    const dnNum = `DN-${(sale.id || '').slice(0, 8).toUpperCase()}`;
-    const invoiceNum = `INV-${(sale.id || '').slice(0, 8).toUpperCase()}`;
-    const dateStr = new Date(sale.timestamp || Date.now()).toLocaleString();
-    const customerName = sale.customer_name || sale.customerName || 'Walk-in Customer';
-
-    for (let c = 1; c <= copiesCount; c++) {
-      const copyLabel = Utils.getCopyName(c);
-      const rowsHTML = items.map((it, idx) => {
-        const name  = it.productname  || it.productName  || it.name  || it.product_name || 'Item';
-        const sku   = it.barcode      || it.sku           || it.code  || '';
-        const qty   = parseFloat(it.quantity  || it.qty  || 1);
-        const price = parseFloat(it.unit_price || it.price || it.unitprice || 0);
-        const sub   = qty * price;
-        return `
-          <tr>
-            <td class="text-center">${idx + 1}</td>
-            <td><strong>${Utils.escapeHtml(name)}</strong>${sku ? `<div style="font-size:10px;color:#64748b;">${Utils.escapeHtml(sku)}</div>` : ''}</td>
-            <td class="text-center">${qty}</td>
-            <td class="text-right">KES ${Utils.formatCurrency(price)}</td>
-            <td class="text-right">KES ${Utils.formatCurrency(sub)}</td>
-          </tr>
-        `;
-      }).join('');
-
-      fullHTML += `
-        <div class="doc-container">
-          <table class="header-table">
-            <tr>
-              <td>
-                <div class="company-title">AUTOPAK INTERNATIONAL</div>
-                <div class="company-sub">
-                  Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks<br>
-                  Plot 123, Industrial Area, Nairobi, Kenya | Tel: +254 700 000 000<br>
-                  Email: info@autopak.co.ke
-                </div>
-              </td>
-              <td class="doc-badge">
                 <div class="doc-type">DELIVERY NOTE</div>
                 <div class="copy-label">${copyLabel}</div>
               </td>
@@ -295,7 +322,8 @@ const Utils = {
               <td style="width:50%;">
                 <div class="meta-label">Deliver To Customer:</div>
                 <div class="meta-value">${Utils.escapeHtml(customerName)}</div>
-                <div style="font-size:11px; margin-top:2px;">Destination: Customer Premises / Site</div>
+                ${customerKRA !== 'N/A' ? `<div style="font-size:11px; margin-top:2px;"><strong>KRA PIN:</strong> ${Utils.escapeHtml(customerKRA)}</div>` : ''}
+                <div style="font-size:11px; margin-top:2px;">Destination: ${Utils.escapeHtml(sale.customer_address || 'Customer Premises / Site')}</div>
               </td>
               <td style="width:25%;">
                 <div class="meta-label">Delivery Note No:</div>
@@ -307,7 +335,7 @@ const Utils = {
                 <div class="meta-label">Date & Time:</div>
                 <div class="meta-value" style="font-size:11px;">${dateStr}</div>
                 <div class="meta-label" style="margin-top:6px;">Status:</div>
-                <div class="meta-value">DISPATCHED</div>
+                <div class="meta-value" style="color:#16a34a; font-weight:700;">DISPATCHED</div>
               </td>
             </tr>
           </table>
@@ -329,7 +357,7 @@ const Utils = {
 
           <table class="totals-table">
             <tr>
-              <td>Total Items:</td>
+              <td>Total Lines:</td>
               <td class="text-right">${items.length} line(s)</td>
             </tr>
             <tr class="grand-total">
@@ -378,11 +406,42 @@ const Utils = {
   },
 
   showPrintDialog(sale) {
+    Utils._activePrintSale = sale;
     const saleId = (sale.id || '').slice(0, 8).toUpperCase();
+    const role = (typeof currentUser !== 'undefined' && currentUser?.role) || localStorage.getItem('userRole') || 'staff';
+    const isApproved = (sale.payment_status || '').toLowerCase() === 'approved';
+
+    // Restrict staff from printing unapproved sales
+    if (role !== 'admin' && !isApproved) {
+      Utils.showModal({
+        title: `<i class="bi bi-shield-lock-fill" style="color:#f59e0b;"></i> Printing Restricted`,
+        content: `
+          <div style="text-align:center; padding:15px 10px;">
+            <div style="font-size:3rem; color:#f59e0b; margin-bottom:12px;">
+              <i class="bi bi-hourglass-split"></i>
+            </div>
+            <h4 style="margin-bottom:8px; font-weight:700; color:#1e293b;">Awaiting Admin Approval</h4>
+            <p style="color:#475569; font-size:0.95rem; line-height:1.5;">
+              Tax Invoices and Delivery Notes cannot be printed before payment is approved by the Administrator.
+            </p>
+            <div style="background:#fef3c7; color:#92400e; padding:10px 14px; border-radius:8px; font-size:0.85rem; margin-top:14px; font-weight:500;">
+              Status: <strong>Pending Approval (Ref: ${Utils.escapeHtml(sale.payment_reference || sale.payment_ref || 'N/A')})</strong>
+            </div>
+            <div style="margin-top:14px; font-size:0.8rem; color:#94a3b8;">
+              Once the admin approves this sale under Pending Payments, you will be able to print all documents.
+            </div>
+          </div>
+        `,
+        footer: `<button class="btn btn-primary btn-block" onclick="document.querySelector('.modal-overlay')?.remove()">Understood</button>`
+      });
+      return;
+    }
+
     const modalContent = `
       <div style="padding: 10px 0;">
         <p style="margin-bottom: 16px; color: #475569;">
           Select document type and number of copies to print for <strong>Sale #${saleId}</strong>.
+          ${!isApproved ? '<span class="badge badge-warning" style="margin-left:6px;">Admin Preview Mode</span>' : ''}
         </p>
 
         <div class="form-group" style="margin-bottom: 16px;">
@@ -392,7 +451,7 @@ const Utils = {
               <input type="radio" name="printDocType" value="invoice" checked />
               <div>
                 <strong>Tax Invoice</strong>
-                <div style="font-size:0.75rem; color:#64748b;">With pricing & totals</div>
+                <div style="font-size:0.75rem; color:#64748b;">With 16% VAT & KRA PIN</div>
               </div>
             </label>
             <label style="flex:1; border:1.5px solid var(--border); padding:10px; border-radius:8px; cursor:pointer; display:flex; align-items:center; gap:8px;">
@@ -420,7 +479,10 @@ const Utils = {
 
     const footer = `
       <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
-      <button class="btn btn-primary" onclick="Utils.executePrint(${JSON.stringify(sale).replace(/"/g, '&quot;')})">
+      <button class="btn btn-outline" onclick="Utils.previewPDF()">
+        <i class="bi bi-file-earmark-pdf"></i> View as PDF
+      </button>
+      <button class="btn btn-primary" onclick="Utils.executePrint()">
         <i class="bi bi-printer"></i> Print Now
       </button>
     `;
@@ -432,7 +494,61 @@ const Utils = {
     });
   },
 
-  executePrint(sale) {
+  previewPDF() {
+    const sale = Utils._activePrintSale;
+    if (!sale) return;
+    const docType = document.querySelector('input[name="printDocType"]:checked')?.value || 'invoice';
+    const copies = parseInt(document.getElementById('printCopiesCount')?.value || '1', 10);
+    
+    const docHTML = docType === 'invoice'
+      ? Utils.generateInvoiceHTML(sale, copies)
+      : Utils.generateDeliveryNoteHTML(sale, copies);
+    
+    document.querySelector('.modal-overlay')?.remove();
+
+    const previewContainer = `
+      <div style="max-height:75vh; overflow-y:auto; background:#475569; padding:20px; border-radius:8px; display:flex; justify-content:center;">
+        <div id="pdfRenderArea" style="background:white; width:100%; max-width:760px; box-shadow:0 8px 30px rgba(0,0,0,0.3); border-radius:4px; padding:20px; color:#0f172a;">
+          ${docHTML}
+        </div>
+      </div>
+    `;
+
+    Utils.showModal({
+      title: `<i class="bi bi-file-earmark-pdf"></i> PDF Preview – ${docType === 'invoice' ? 'Tax Invoice' : 'Delivery Note'}`,
+      content: previewContainer,
+      footer: `
+        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Close Preview</button>
+        <button class="btn btn-outline" onclick="Utils.downloadPDFFromPreview('${docType === 'invoice' ? 'Invoice' : 'DeliveryNote'}_${(sale.id||'').slice(0,8)}')">
+          <i class="bi bi-download"></i> Download PDF
+        </button>
+        <button class="btn btn-primary" onclick="Utils.executePrint()">
+          <i class="bi bi-printer"></i> Print Document
+        </button>
+      `
+    });
+  },
+
+  downloadPDFFromPreview(filename) {
+    const element = document.getElementById('pdfRenderArea');
+    if (!element) return;
+    if (typeof html2pdf !== 'undefined') {
+      const opt = {
+        margin: [5, 5, 5, 5],
+        filename: `${filename}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    } else {
+      window.print();
+    }
+  },
+
+  executePrint(passedSale) {
+    const sale = passedSale || Utils._activePrintSale;
+    if (!sale) return;
     const docType = document.querySelector('input[name="printDocType"]:checked')?.value || 'invoice';
     const copies = parseInt(document.getElementById('printCopiesCount')?.value || '1', 10);
     

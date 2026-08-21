@@ -17,7 +17,16 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'renderer')));
 
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
+// Prevent process crashes on unhandled errors/rejections
+process.on('uncaughtException', (err) => {
+  console.error('Server Uncaught Exception (handled):', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Server Unhandled Rejection (handled):', reason);
+});
+
+// Generous rate limit to support multiple computers/sessions concurrently
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10000 });
 app.use('/api/', apiLimiter);
 
 const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
@@ -211,10 +220,19 @@ app.get('/api/products/:id', authMiddleware, async (req, res) => {
 app.post('/api/products', authMiddleware, adminOnly, async (req, res) => {
   try {
     const id = randomUUID();
-    const { name, price, barcode, category, stock } = req.body;
+    const { name, price, wholesale_price, distributor_price, barcode, category, stock } = req.body;
     await db.query(
-      `INSERT INTO products (id, name, price, stock, barcode, category) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [id, name, price, stock || 0, barcode || null, category || null]
+      `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, barcode, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        id,
+        name,
+        parseFloat(price) || 0,
+        wholesale_price !== undefined && wholesale_price !== null && wholesale_price !== '' ? parseFloat(wholesale_price) : null,
+        distributor_price !== undefined && distributor_price !== null && distributor_price !== '' ? parseFloat(distributor_price) : null,
+        stock || 0,
+        barcode || null,
+        category || null
+      ]
     );
     res.status(201).json({ id, ...req.body, stock: stock || 0 });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -222,9 +240,17 @@ app.post('/api/products', authMiddleware, adminOnly, async (req, res) => {
 
 app.put('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const allowed = ['name','price','stock','barcode','category'];
+    const allowed = ['name','price','wholesale_price','distributor_price','stock','barcode','category'];
     const data = {};
-    allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
+    allowed.forEach(k => {
+      if (req.body[k] !== undefined) {
+        if (k === 'price' || k === 'wholesale_price' || k === 'distributor_price' || k === 'stock') {
+          data[k] = req.body[k] !== '' && req.body[k] !== null ? parseFloat(req.body[k]) : null;
+        } else {
+          data[k] = req.body[k];
+        }
+      }
+    });
     if (Object.keys(data).length) {
       const set = Object.keys(data).map((k, i) => `"${k}"=$${i+1}`).join(',');
       const vals = Object.values(data);
@@ -303,18 +329,18 @@ app.get('/api/customers/:id', authMiddleware, async (req, res) => {
 app.post('/api/customers', authMiddleware, async (req, res) => {
   try {
     const id = randomUUID();
-    const { name, contact_person, phone, email, address, kra_pin, security_pin } = req.body;
+    const { name, contact_person, phone, email, address, customer_type, kra_pin, security_pin } = req.body;
     await db.query(
-      `INSERT INTO customers (id, name, contact_person, phone, email, address, kra_pin, security_pin) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [id, name, contact_person || null, phone || null, email || null, address || null, kra_pin || null, security_pin || null]
+      `INSERT INTO customers (id, name, contact_person, phone, email, address, customer_type, kra_pin, security_pin) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, name, contact_person || null, phone || null, email || null, address || null, customer_type || 'retailer', kra_pin || null, security_pin || null]
     );
-    res.status(201).json({ id, ...req.body });
+    res.status(201).json({ id, ...req.body, customer_type: customer_type || 'retailer' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.put('/api/customers/:id', authMiddleware, async (req, res) => {
   try {
-    const allowed = ['name','contact_person','phone','email','address','kra_pin','security_pin'];
+    const allowed = ['name','contact_person','phone','email','address','customer_type','kra_pin','security_pin'];
     const data = {};
     allowed.forEach(k => { if (req.body[k] !== undefined) data[k] = req.body[k]; });
     if (Object.keys(data).length) {
@@ -353,7 +379,7 @@ app.post('/api/customer-prices', authMiddleware, async (req, res) => {
 // ─── Sales (pending payment) ────────────
 app.post('/api/sales', authMiddleware, async (req, res) => {
   try {
-    const { items, paymentMethod, customer_id, payment_reference } = req.body;
+    const { items, paymentMethod, customer_id, payment_reference, vat_rate: reqVatRate } = req.body;
     if (!items || !items.length) return res.status(400).json({ error: 'Cart empty' });
     const allowedMethods = ['mobile_money','bank_transfer','cheque'];
     if (!allowedMethods.includes(paymentMethod)) {
@@ -361,45 +387,75 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     }
     if (!payment_reference) return res.status(400).json({ error: 'Payment reference required' });
 
-    let total = 0;
+    // Fetch customer details if provided
+    let customerType = 'retailer';
+    if (customer_id) {
+      const custRes = await db.query('SELECT customer_type FROM customers WHERE id=$1', [customer_id]);
+      if (custRes.rows.length && custRes.rows[0].customer_type) {
+        customerType = custRes.rows[0].customer_type.toLowerCase();
+      }
+    }
+
+    let subtotal = 0;
+    const evaluatedItems = [];
+
     for (const item of items) {
       const prod = await db.query('SELECT * FROM products WHERE id=$1', [item.productId]);
       if (!prod.rows.length) return res.status(404).json({ error: `Product ${item.productId} not found` });
       const product = prod.rows[0];
       if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
 
-      // Apply customer-specific price if exists
+      // Determine price by customer type / custom price
       let price = product.price;
+      if (customerType === 'distributor' && product.distributor_price !== null && product.distributor_price !== undefined) {
+        price = product.distributor_price;
+      } else if (customerType === 'wholesaler' && product.wholesale_price !== null && product.wholesale_price !== undefined) {
+        price = product.wholesale_price;
+      }
+
       if (customer_id) {
         const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
         if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
       }
-      total += price * item.quantity;
+
+      subtotal += price * item.quantity;
+      evaluatedItems.push({
+        productId: item.productId,
+        productName: product.name,
+        quantity: item.quantity,
+        price
+      });
     }
+
+    // Value Added Tax calculation (default 16% = 0.16, or 0% if toggled off)
+    const vatRate = reqVatRate !== undefined ? parseFloat(reqVatRate) : 0.16;
+    const vatAmount = vatRate > 0 ? Math.round(subtotal * vatRate * 100) / 100 : 0;
+    const total = Math.round((subtotal + vatAmount) * 100) / 100;
 
     const saleId = randomUUID();
     await db.query(
-      `INSERT INTO sales (id, branch_id, customer_id, total, paymentMethod, payment_reference, payment_status, status, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,'pending_payment','completed',$7)`,
-      [saleId, BRANCH_ID, customer_id || null, total, paymentMethod, payment_reference, req.user.username]
+      `INSERT INTO sales (id, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, payment_status, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending_payment','completed',$10)`,
+      [saleId, BRANCH_ID, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, req.user.username]
     );
 
-    for (const item of items) {
-      const prod = await db.query('SELECT * FROM products WHERE id=$1', [item.productId]);
-      const p = prod.rows[0];
-      let price = p.price;
-      if (customer_id) {
-        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
-        if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
-      }
+    for (const item of evaluatedItems) {
       await db.query(
         `INSERT INTO sale_items (saleId, productId, productName, quantity, price) VALUES ($1,$2,$3,$4,$5)`,
-        [saleId, item.productId, p.name, item.quantity, price]
+        [saleId, item.productId, item.productName, item.quantity, item.price]
       );
-      // NOTE: Stock is NOT deducted here – it waits for admin approval
     }
 
-    res.status(201).json({ id: saleId, total, paymentMethod, payment_status: 'pending_payment', message: 'Payment pending admin approval' });
+    res.status(201).json({
+      id: saleId,
+      subtotal,
+      vat_rate: vatRate,
+      vat_amount: vatAmount,
+      total,
+      paymentMethod,
+      payment_status: 'pending_payment',
+      message: 'Payment pending admin approval'
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

@@ -108,8 +108,12 @@ const Sales = {
       const isApproved = (s.payment_status || 'approved') === 'approved';
       const isPending = s.payment_status === 'pending_payment';
       const isRejected = s.payment_status === 'rejected';
+      const role = (typeof currentUser !== 'undefined' && currentUser?.role) || localStorage.getItem('userRole') || 'staff';
 
       const itemsStr = (s.items || []).map(i => `${Utils.escapeHtml(i.productname || i.productName)} (x${i.quantity})`).join(', ');
+
+      const subtotalVal = s.subtotal !== null && s.subtotal !== undefined ? parseFloat(s.subtotal) : parseFloat(s.total || 0);
+      const vatVal = s.vat_amount !== null && s.vat_amount !== undefined ? parseFloat(s.vat_amount) : 0;
 
       return `
         <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
@@ -125,8 +129,11 @@ const Sales = {
               <strong>Customer:</strong> ${Utils.escapeHtml(s.customer_name || 'Walk-in Customer')}
               ${s.customer_kra_pin ? `<span style="color:#64748b; font-size:0.8rem; margin-left:6px;">(KRA: ${Utils.escapeHtml(s.customer_kra_pin)})</span>` : ''}
             </div>
-            <div style="font-size:0.85rem; color:#64748b;">
+            <div style="font-size:0.85rem; color:#64748b; margin-bottom:2px;">
               <strong>Items:</strong> ${itemsStr || 'No items listed'}
+            </div>
+            <div style="font-size:0.75rem; color:#64748b;">
+              Subtotal: KES ${Utils.formatCurrency(subtotalVal)} | 16% VAT: KES ${Utils.formatCurrency(vatVal)}
             </div>
           </div>
 
@@ -136,9 +143,15 @@ const Sales = {
               ${(s.paymentMethod || 'CASH').replace('_', ' ').toUpperCase()} | Ref: <strong>${Utils.escapeHtml(s.payment_reference || 'N/A')}</strong>
             </div>
             <div style="margin-top:8px; display:flex; gap:6px; justify-content:flex-end;">
-              <button class="btn btn-sm btn-outline" onclick="Utils.showPrintDialog(${JSON.stringify(s).replace(/"/g, '&quot;')})">
-                <i class="bi bi-printer"></i> Print Docs
-              </button>
+              ${(role !== 'admin' && !isApproved) ? `
+                <button class="btn btn-sm btn-outline" style="border-color:#f59e0b; color:#d97706;" onclick="Utils.showPrintDialog(${JSON.stringify(s).replace(/"/g, '&quot;')})">
+                  <i class="bi bi-lock-fill"></i> Awaiting Approval
+                </button>
+              ` : `
+                <button class="btn btn-sm btn-outline" onclick="Utils.showPrintDialog(${JSON.stringify(s).replace(/"/g, '&quot;')})">
+                  <i class="bi bi-printer"></i> Print Docs
+                </button>
+              `}
             </div>
           </div>
         </div>

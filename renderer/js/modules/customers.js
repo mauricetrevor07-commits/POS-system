@@ -140,12 +140,21 @@ const Customers = {
         ? (isRevealed ? `<code>${Utils.escapeHtml(c.security_pin)}</code>` : `<span style="letter-spacing:2px; font-weight:700;">••••</span>`)
         : '<span style="color:#94a3b8;">None</span>';
 
+      const cType = (c.customer_type || 'retailer').toLowerCase();
+      let typeBadge = '<span class="badge badge-secondary">Retailer</span>';
+      if (cType === 'distributor') {
+        typeBadge = '<span class="badge" style="background:rgba(124,58,237,0.15); color:#7c3aed; font-weight:600;"><i class="bi bi-diagram-3"></i> Distributor</span>';
+      } else if (cType === 'wholesaler') {
+        typeBadge = '<span class="badge" style="background:rgba(2,132,199,0.15); color:#0284c7; font-weight:600;"><i class="bi bi-box-seam"></i> Wholesaler</span>';
+      }
+
       return `
         <tr>
           <td>
             <strong>${Utils.escapeHtml(c.name)}</strong>
             ${c.address ? `<div style="font-size:0.75rem; color:#64748b;"><i class="bi bi-geo-alt"></i> ${Utils.escapeHtml(c.address)}</div>` : ''}
           </td>
+          <td>${typeBadge}</td>
           <td>${Utils.escapeHtml(c.contact_person || '-')}</td>
           <td>${Utils.escapeHtml(c.phone || '-')}</td>
           <td>
@@ -175,6 +184,7 @@ const Customers = {
         <thead>
           <tr>
             <th>Customer / Company Name</th>
+            <th>Category / Tier</th>
             <th>Contact Person</th>
             <th>Phone</th>
             <th>KRA Tax PIN</th>
@@ -183,7 +193,7 @@ const Customers = {
           </tr>
         </thead>
         <tbody>
-          ${html || '<tr><td colspan="6" class="text-center" style="padding:24px; color:#64748b;">No customers found.</td></tr>'}
+          ${html || '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No customers found.</td></tr>'}
         </tbody>
       </table>
     `;
@@ -191,11 +201,22 @@ const Customers = {
 
   showForm(customer = null) {
     const isEdit = !!customer;
+    const currentType = (customer?.customer_type || 'retailer').toLowerCase();
     const content = `
       <div style="padding:10px 0;">
-        <div class="form-group" style="margin-bottom:12px;">
-          <label style="font-weight:600; margin-bottom:4px; display:block;">Customer / Company Name *</label>
-          <input id="custName" class="form-control" value="${Utils.escapeHtml(customer?.name || '')}" placeholder="e.g. Acme Constructions Ltd" />
+        <div style="display:flex; gap:12px; margin-bottom:12px;">
+          <div class="form-group" style="flex:2;">
+            <label style="font-weight:600; margin-bottom:4px; display:block;">Customer / Company Name *</label>
+            <input id="custName" class="form-control" value="${Utils.escapeHtml(customer?.name || '')}" placeholder="e.g. Acme Constructions Ltd" />
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label style="font-weight:600; margin-bottom:4px; display:block;">Customer Category *</label>
+            <select id="custType" class="form-control">
+              <option value="retailer" ${currentType === 'retailer' ? 'selected' : ''}>Retailer (Standard)</option>
+              <option value="wholesaler" ${currentType === 'wholesaler' ? 'selected' : ''}>Wholesaler (Wholesale Tier)</option>
+              <option value="distributor" ${currentType === 'distributor' ? 'selected' : ''}>Distributor (Distributor Tier)</option>
+            </select>
+          </div>
         </div>
         <div style="display:flex; gap:12px; margin-bottom:12px;">
           <div class="form-group" style="flex:1;">
@@ -250,6 +271,7 @@ const Customers = {
     document.getElementById('saveCustomer').addEventListener('click', async () => {
       const data = {
         name: document.getElementById('custName')?.value.trim(),
+        customer_type: document.getElementById('custType')?.value || 'retailer',
         contact_person: document.getElementById('custContact')?.value.trim(),
         phone: document.getElementById('custPhone')?.value.trim(),
         email: document.getElementById('custEmail')?.value.trim(),
