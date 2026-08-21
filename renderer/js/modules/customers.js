@@ -148,6 +148,8 @@ const Customers = {
         typeBadge = '<span class="badge" style="background:rgba(2,132,199,0.15); color:#0284c7; font-weight:600;"><i class="bi bi-box-seam"></i> Wholesaler</span>';
       }
 
+      const isAdmin = (typeof currentUser !== 'undefined' && currentUser?.role === 'admin') || localStorage.getItem('userRole') === 'admin';
+
       return `
         <tr>
           <td>
@@ -174,6 +176,11 @@ const Customers = {
           <td class="text-right">
             <button class="btn btn-sm btn-outline" onclick="Customers.editForm('${c.id}')"><i class="bi bi-pencil"></i> Edit</button>
             <button class="btn btn-sm btn-outline" onclick="Customers.managePrices('${c.id}')"><i class="bi bi-tag"></i> Prices</button>
+            ${isAdmin ? `
+              <button class="btn btn-sm btn-danger" onclick="Customers.deleteCustomer('${c.id}', '${Utils.escapeHtml(c.name).replace(/'/g, "\\'")}')" title="Delete Customer">
+                <i class="bi bi-trash"></i>
+              </button>
+            ` : ''}
           </td>
         </tr>
       `;
@@ -353,6 +360,35 @@ const Customers = {
       }
       Utils.toast('Customer pricing updated successfully', 'success');
       close();
+    });
+  },
+
+  deleteCustomer(id, name) {
+    Utils.showModal({
+      title: `<i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;"></i> Delete Customer`,
+      content: `
+        <div style="padding:10px 0;">
+          <p>Are you sure you want to delete customer <strong>${Utils.escapeHtml(name)}</strong>?</p>
+          <p style="font-size:0.85rem; color:#64748b; margin-top:8px;">
+            This will remove their profile and negotiated custom price list. Historic sales records will be preserved.
+          </p>
+        </div>
+      `,
+      footer: `
+        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
+        <button class="btn btn-danger" id="confirmDeleteCust"><i class="bi bi-trash"></i> Delete Customer</button>
+      `
+    });
+
+    document.getElementById('confirmDeleteCust')?.addEventListener('click', async () => {
+      try {
+        await DB._fetch(`/api/customers/${id}`, { method: 'DELETE' });
+        document.querySelector('.modal-overlay')?.remove();
+        Utils.toast('Customer deleted successfully', 'success');
+        this.loadList();
+      } catch (e) {
+        Utils.toast(e.message, 'error');
+      }
     });
   }
 };

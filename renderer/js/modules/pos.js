@@ -3,9 +3,10 @@ const POS = {
   selectedCustomer: null,
   products: [],
   customers: [],
+  customerCustomPrices: {},
   selectedCategory: 'all',
   searchQuery: '',
-  isVatEnabled: true,
+  vatRate: 0.16,
 
   async render() {
     const container = document.getElementById('page-content');
@@ -48,7 +49,7 @@ const POS = {
         <div style="flex:1; min-width:330px;">
           <div class="card" style="box-shadow:var(--shadow-md);">
             <div class="card-header" style="background:#f8fafc; padding:14px 16px;">
-              <label style="font-weight:600; font-size:0.85rem; margin-bottom:4px; display:block;">Select Customer (Pricing Tier)</label>
+              <label style="font-weight:600; font-size:0.85rem; margin-bottom:4px; display:block;">Select Customer</label>
               <select id="customerSelect" class="form-control" onchange="POS.selectCustomer()">
                 <option value="">Walk‑in Customer [RETAIL]</option>
               </select>
@@ -58,19 +59,15 @@ const POS = {
               <div style="font-weight:600; font-size:0.85rem; color:#64748b; margin-bottom:8px; text-transform:uppercase;">Current Order</div>
               <div id="cartItems" style="min-height:100px; max-height:190px; overflow-y:auto; margin-bottom:12px;"></div>
               
-              <!-- 16% Value Added Tax (VAT) Selector -->
-              <div style="margin-bottom:12px;">
+              <!-- Value Added Tax (VAT) Dropdown Selection -->
+              <div class="form-group" style="margin-bottom:12px;">
                 <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
-                  Value Added Tax (16% VAT)
+                  <i class="bi bi-percent"></i> Value Added Tax (VAT)
                 </label>
-                <div style="display:flex; gap:6px;">
-                  <button id="vatBtnOn" class="btn btn-sm ${this.isVatEnabled ? 'btn-primary' : 'btn-outline'}" style="flex:1; font-size:0.8rem;" onclick="POS.setVat(true)">
-                    <i class="bi bi-check-circle-fill"></i> With VAT (16%)
-                  </button>
-                  <button id="vatBtnOff" class="btn btn-sm ${!this.isVatEnabled ? 'btn-primary' : 'btn-outline'}" style="flex:1; font-size:0.8rem;" onclick="POS.setVat(false)">
-                    <i class="bi bi-dash-circle"></i> Without VAT (0%)
-                  </button>
-                </div>
+                <select id="vatSelect" class="form-control" onchange="POS.onVatChange()" style="font-size:0.88rem; font-weight:500;">
+                  <option value="0.16" ${this.vatRate === 0.16 ? 'selected' : ''}>Value Added Tax Included (16% VAT)</option>
+                  <option value="0" ${this.vatRate === 0 ? 'selected' : ''}>Without Value Added Tax (0% / Exempt)</option>
+                </select>
               </div>
 
               <!-- Cart Summary Breakdown -->
@@ -80,7 +77,7 @@ const POS = {
                   <span>KES <span id="cartSubtotal">0.00</span></span>
                 </div>
                 <div style="display:flex; justify-content:space-between; font-size:0.85rem; color:#0284c7; margin-bottom:6px;">
-                  <span id="vatLabelText">VAT (16%):</span>
+                  <span id="vatLabelText">${this.vatRate > 0 ? 'VAT (16%):' : 'VAT (0% Exempt):'}</span>
                   <span>KES <span id="cartVat">0.00</span></span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center; font-size:1.15rem; font-weight:700; color:var(--primary); border-top:1px dashed #cbd5e1; padding-top:6px;">
@@ -120,22 +117,11 @@ const POS = {
     this.updateCartDisplay();
   },
 
-  setVat(enabled) {
-    this.isVatEnabled = enabled;
-    const btnOn = document.getElementById('vatBtnOn');
-    const btnOff = document.getElementById('vatBtnOff');
-    if (btnOn && btnOff) {
-      if (enabled) {
-        btnOn.className = 'btn btn-sm btn-primary';
-        btnOff.className = 'btn btn-sm btn-outline';
-      } else {
-        btnOn.className = 'btn btn-sm btn-outline';
-        btnOff.className = 'btn btn-sm btn-primary';
-      }
-    }
+  onVatChange() {
+    this.vatRate = parseFloat(document.getElementById('vatSelect')?.value || '0.16');
     const vatLabel = document.getElementById('vatLabelText');
     if (vatLabel) {
-      vatLabel.textContent = enabled ? 'VAT (16%):' : 'VAT (0% Exempt):';
+      vatLabel.textContent = this.vatRate > 0 ? 'VAT (16%):' : 'VAT (0% Exempt):';
     }
     this.updateCartDisplay();
   },
@@ -168,6 +154,11 @@ const POS = {
   },
 
   getItemUnitPrice(p) {
+    // 1. Highest priority: Specific customer negotiated custom price
+    if (this.customerCustomPrices && this.customerCustomPrices[p.id] !== undefined && this.customerCustomPrices[p.id] !== null) {
+      return parseFloat(this.customerCustomPrices[p.id]);
+    }
+    // 2. Customer tier price
     const cust = this.customers.find(c => c.id === this.selectedCustomer);
     const tier = (cust?.customer_type || 'retailer').toLowerCase();
     if (tier === 'distributor' && p.distributor_price !== null && p.distributor_price !== undefined && p.distributor_price !== '') {
@@ -176,6 +167,7 @@ const POS = {
     if (tier === 'wholesaler' && p.wholesale_price !== null && p.wholesale_price !== undefined && p.wholesale_price !== '') {
       return parseFloat(p.wholesale_price);
     }
+    // 3. Standard Retail Price
     return parseFloat(p.price || 0);
   },
 
@@ -217,21 +209,33 @@ const POS = {
       const icon = isCuttable ? '🌊' : (pCat.includes('sack') ? '📦' : '🛍️');
 
       const unitPrice = this.getItemUnitPrice(p);
+      const hasCustomPrice = this.customerCustomPrices && this.customerCustomPrices[p.id] !== undefined;
+
       let tierNote = '';
-      if (tier === 'distributor' && p.distributor_price) {
-        tierNote = '<span style="font-size:0.7rem; color:#7c3aed; font-weight:600;">(Distributor Tier)</span>';
+      if (hasCustomPrice) {
+        tierNote = '<div style="margin-top:3px;"><span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; font-weight:700;"><i class="bi bi-tag-fill"></i> Custom Customer Price</span></div>';
+      } else if (tier === 'distributor' && p.distributor_price) {
+        tierNote = '<div style="margin-top:3px;"><span class="badge" style="background:#ede9fe; color:#7c3aed; font-size:0.7rem; font-weight:600;"><i class="bi bi-diagram-3"></i> Distributor Tier</span></div>';
       } else if (tier === 'wholesaler' && p.wholesale_price) {
-        tierNote = '<span style="font-size:0.7rem; color:#0284c7; font-weight:600;">(Wholesale Tier)</span>';
+        tierNote = '<div style="margin-top:3px;"><span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.7rem; font-weight:600;"><i class="bi bi-box-seam"></i> Wholesale Tier</span></div>';
       }
+
+      const priceDisplay = (hasCustomPrice || (tier !== 'retailer' && unitPrice !== p.price))
+        ? `<div class="price" style="${hasCustomPrice ? 'color:#15803d;' : ''}">
+             <span style="text-decoration:line-through; font-size:0.8rem; color:#94a3b8; margin-right:4px;">KES ${Utils.formatCurrency(p.price)}</span>
+             KES ${Utils.formatCurrency(unitPrice)}
+           </div>`
+        : `<div class="price">KES ${Utils.formatCurrency(unitPrice)}</div>`;
 
       return `
         <div class="product-card">
           <div>
             <div style="font-size:2rem; margin-bottom:6px;">${icon}</div>
             <h4 style="margin-bottom:4px; font-size:1rem;">${Utils.escapeHtml(p.name)}</h4>
-            <div style="font-size:0.75rem; color:#64748b; margin-bottom:8px;">${Utils.escapeHtml(p.category || 'General')}</div>
-            <div class="price">KES ${Utils.formatCurrency(unitPrice)} ${tierNote}</div>
-            <div class="stock" style="${p.stock <= 5 ? 'color:#ef4444; font-weight:600;' : ''}">
+            <div style="font-size:0.75rem; color:#64748b; margin-bottom:6px;">${Utils.escapeHtml(p.category || 'General')}</div>
+            ${priceDisplay}
+            ${tierNote}
+            <div class="stock" style="${p.stock <= 5 ? 'color:#ef4444; font-weight:600;' : ''}; margin-top:6px;">
               Stock: ${p.stock} ${isCuttable ? 'm' : 'units'}
             </div>
           </div>
@@ -273,8 +277,19 @@ const POS = {
     } catch (e) {}
   },
 
-  selectCustomer() {
+  async selectCustomer() {
     this.selectedCustomer = document.getElementById('customerSelect')?.value || null;
+    this.customerCustomPrices = {};
+
+    if (this.selectedCustomer) {
+      try {
+        const cpList = await DB._fetch(`/api/customer-prices/${this.selectedCustomer}`);
+        (cpList || []).forEach(cp => {
+          this.customerCustomPrices[cp.product_id] = parseFloat(cp.custom_price);
+        });
+      } catch (_) {}
+    }
+
     const cust = this.customers.find(c => c.id === this.selectedCustomer);
     const tierBadge = document.getElementById('customerTierBadge');
     if (tierBadge) {
@@ -282,17 +297,22 @@ const POS = {
         tierBadge.innerHTML = '<span class="badge badge-secondary" style="font-size:0.75rem;">Standard Retail Pricing</span>';
       } else {
         const tier = (cust.customer_type || 'retailer').toLowerCase();
+        const customCount = Object.keys(this.customerCustomPrices).length;
+        let customBadgeHtml = customCount > 0
+          ? `<span class="badge" style="background:#dcfce7; color:#15803d; font-size:0.75rem; font-weight:700; margin-left:6px;"><i class="bi bi-tag-fill"></i> ${customCount} Custom Price(s) Active</span>`
+          : '';
+
         if (tier === 'distributor') {
-          tierBadge.innerHTML = '<span class="badge" style="background:#ede9fe; color:#7c3aed; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Distributor Pricing Active</span>';
+          tierBadge.innerHTML = `<span class="badge" style="background:#ede9fe; color:#7c3aed; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Distributor Tier</span>${customBadgeHtml}`;
         } else if (tier === 'wholesaler') {
-          tierBadge.innerHTML = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Wholesale Pricing Active</span>';
+          tierBadge.innerHTML = `<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.75rem; font-weight:600;"><i class="bi bi-tags-fill"></i> Wholesale Tier</span>${customBadgeHtml}`;
         } else {
-          tierBadge.innerHTML = '<span class="badge badge-secondary" style="font-size:0.75rem;">Retail Pricing Active</span>';
+          tierBadge.innerHTML = `<span class="badge badge-secondary" style="font-size:0.75rem;">Retail Tier</span>${customBadgeHtml}`;
         }
       }
     }
 
-    // Refresh cart item prices with the customer's tier pricing
+    // Refresh cart item prices with the customer's custom or tier pricing
     this.cart.forEach(item => {
       const p = this.products.find(prod => prod.id === item.productId);
       if (p) {
@@ -355,7 +375,7 @@ const POS = {
         </div>`;
     }).join('');
 
-    const vatRate = this.isVatEnabled ? 0.16 : 0;
+    const vatRate = this.vatRate !== undefined ? this.vatRate : 0.16;
     const vatAmount = vatRate > 0 ? Math.round(subtotal * vatRate * 100) / 100 : 0;
     const grandTotal = Math.round((subtotal + vatAmount) * 100) / 100;
 
@@ -385,7 +405,7 @@ const POS = {
     try {
       const customerObj = this.customers?.find(c => c.id === this.selectedCustomer);
       const customerName = customerObj?.name || 'Walk-in Customer';
-      const vatRate = this.isVatEnabled ? 0.16 : 0;
+      const vatRate = this.vatRate !== undefined ? this.vatRate : 0.16;
 
       const sale = await DB._fetch('/api/sales', {
         method: 'POST',

@@ -201,6 +201,42 @@ app.post('/api/settings', authMiddleware, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Apply Category Pricing Tiers (admin only) ──
+app.post('/api/settings/apply-category-pricing', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { category, wholesale_discount_pct, distributor_discount_pct } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+
+    const wsPct = parseFloat(wholesale_discount_pct) || 0;
+    const distPct = parseFloat(distributor_discount_pct) || 0;
+
+    // Save configuration in settings
+    const settingsKey = `tier_rule_${category.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    await db.query(
+      `INSERT INTO settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [settingsKey, JSON.stringify({ category, wholesale_discount_pct: wsPct, distributor_discount_pct: distPct })]
+    );
+
+    // Apply to all products in that category
+    let updateSql = `
+      UPDATE products 
+      SET wholesale_price = ROUND((price * (1 - $1::numeric / 100))::numeric, 2),
+          distributor_price = ROUND((price * (1 - $2::numeric / 100))::numeric, 2),
+          updated_at = NOW()
+    `;
+    let params = [wsPct, distPct];
+
+    if (category !== 'ALL') {
+      updateSql += ` WHERE LOWER(category) = LOWER($3)`;
+      params.push(category);
+    }
+
+    const result = await db.query(updateSql, params);
+    res.json({ success: true, updatedProductsCount: result.rowCount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Products ──────────────────────────
 app.get('/api/products', authMiddleware, async (req, res) => {
   try {
@@ -349,6 +385,20 @@ app.put('/api/customers/:id', authMiddleware, async (req, res) => {
       await db.query(`UPDATE customers SET ${set}, updated_at=NOW() WHERE id=$${vals.length+1}`, [...vals, req.params.id]);
     }
     res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/customers/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Clean up custom pricing entries
+    await db.query('DELETE FROM customer_prices WHERE customer_id = $1', [id]);
+    // Unlink sales so historic records are safely preserved
+    await db.query('UPDATE sales SET customer_id = NULL WHERE customer_id = $1', [id]);
+    // Delete customer record
+    const result = await db.query('DELETE FROM customers WHERE id = $1', [id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'Customer not found' });
+    res.json({ success: true, message: 'Customer deleted successfully' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
