@@ -345,6 +345,36 @@ app.delete('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Bulk Update Tier Prices per Product / Category (admin only) ──
+app.post('/api/products/bulk-tier-prices', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { updates } = req.body;
+    if (!Array.isArray(updates) || !updates.length) {
+      return res.status(400).json({ error: 'No product updates provided' });
+    }
+
+    for (const u of updates) {
+      if (!u.id) continue;
+      const price = parseFloat(u.price) || 0;
+      const wsPrice = u.wholesale_price !== null && u.wholesale_price !== undefined && u.wholesale_price !== ''
+        ? parseFloat(u.wholesale_price)
+        : null;
+      const distPrice = u.distributor_price !== null && u.distributor_price !== undefined && u.distributor_price !== ''
+        ? parseFloat(u.distributor_price)
+        : null;
+
+      await db.query(
+        `UPDATE products 
+         SET price = $1, wholesale_price = $2, distributor_price = $3, updated_at = NOW()
+         WHERE id = $4`,
+        [price, wsPrice, distPrice, u.id]
+      );
+    }
+
+    res.json({ success: true, updatedCount: updates.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Import Stock in Bulk (Adds to existing stock) ──
 app.post('/api/products/import-stock', authMiddleware, adminOnly, async (req, res) => {
   try {

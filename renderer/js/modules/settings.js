@@ -26,8 +26,11 @@ const Settings = {
 
                 <!-- Category Tier Pricing Settings -->
                 <div class="card">
-                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                         <span><i class="bi bi-tags-fill"></i> Category Tier Pricing & Bulk Discounts</span>
+                        <button class="btn btn-sm btn-primary" onclick="App.navigate('products'); setTimeout(() => Products.switchView('matrix'), 100);">
+                            <i class="bi bi-grid-3x3"></i> Open Full Category Price Matrix
+                        </button>
                     </div>
                     <div class="card-body" style="padding: 24px;">
                         <p style="color: #64748b; margin-bottom: 20px; font-size: 0.9rem;">

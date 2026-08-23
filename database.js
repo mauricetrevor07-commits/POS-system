@@ -17,15 +17,26 @@ pool.on('error', (err) => {
 });
 
 /**
- * Execute a query and return { rows, rowCount }.
+ * Execute a query and return { rows, rowCount } with automatic retry on cold start/idle disconnects.
  */
-async function query(text, params) {
-  try {
-    const res = await pool.query(text, params);
-    return { rows: res.rows, rowCount: res.rowCount };
-  } catch (err) {
-    console.error('DB query failed:', err.message);
-    throw err;
+async function query(text, params, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await pool.query(text, params);
+      return { rows: res.rows, rowCount: res.rowCount };
+    } catch (err) {
+      const isTransient = err.message.includes('timeout') ||
+        err.message.includes('Connection terminated') ||
+        err.message.includes('ECONNRESET') ||
+        err.message.includes('connection');
+      if (attempt < retries && isTransient) {
+        console.warn(`DB query attempt ${attempt} failed, retrying in ${attempt * 800}ms... (${err.message})`);
+        await new Promise(r => setTimeout(r, attempt * 800));
+      } else {
+        console.error('DB query failed:', err.message);
+        throw err;
+      }
+    }
   }
 }
 

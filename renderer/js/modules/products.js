@@ -4,18 +4,31 @@ const Products = {
   searchQuery: '',
   categoryFilter: 'all',
   stockFilter: 'all',
+  viewMode: 'inventory', // 'inventory' | 'matrix'
+  matrixCategory: 'all',
 
   async render() {
     const container = document.getElementById('page-content');
     container.innerHTML = `
-      <div class="toolbar no-print">
-        <h2>Product & Stock Management</h2>
+      <div class="toolbar no-print" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div>
+          <h2 style="margin-bottom:4px;">Product & Categorical Pricing Management</h2>
+          <div style="font-size:0.85rem; color:#64748b;">Manage inventory stock and specific tier prices (Retail, Wholesale, Distributor) per product per category</div>
+        </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="background:#e2e8f0; border-radius:8px; padding:3px; display:flex; gap:2px;">
+            <button class="btn btn-sm ${this.viewMode === 'inventory' ? 'btn-primary' : 'btn-outline'}" onclick="Products.switchView('inventory')" style="${this.viewMode === 'inventory' ? '' : 'border:none; background:transparent; color:#475569;'}">
+              <i class="bi bi-boxes"></i> Inventory View
+            </button>
+            <button class="btn btn-sm ${this.viewMode === 'matrix' ? 'btn-primary' : 'btn-outline'}" onclick="Products.switchView('matrix')" style="${this.viewMode === 'matrix' ? '' : 'border:none; background:transparent; color:#475569;'}">
+              <i class="bi bi-tags-fill"></i> Category Price Matrix
+            </button>
+          </div>
           <button class="btn btn-outline" onclick="Products.exportStockTemplate()">
-            <i class="bi bi-file-earmark-excel"></i> Export Stock Template
+            <i class="bi bi-file-earmark-excel"></i> Template
           </button>
           <button class="btn btn-outline" onclick="Products.openImportModal()">
-            <i class="bi bi-upload"></i> Import Stock (Excel/CSV)
+            <i class="bi bi-upload"></i> Import Stock
           </button>
           <button class="btn btn-primary" onclick="Products.openModal()">
             <i class="bi bi-plus-lg"></i> Add Product
@@ -23,6 +36,37 @@ const Products = {
         </div>
       </div>
 
+      <div id="productsViewContainer">
+        <!-- Rendered dynamically depending on viewMode -->
+      </div>
+    `;
+    await this.loadList();
+  },
+
+  switchView(mode) {
+    this.viewMode = mode;
+    this.render();
+  },
+
+  async loadList() {
+    try {
+      this.products = await DB._fetch('/api/products');
+      if (this.viewMode === 'matrix') {
+        this.renderMatrixView();
+      } else {
+        this.renderInventoryView();
+      }
+    } catch (e) {
+      const el = document.getElementById('productsViewContainer');
+      if (el) el.innerHTML = '<p style="padding:20px; color:#ef4444;">Failed to load products.</p>';
+    }
+  },
+
+  renderInventoryView() {
+    const container = document.getElementById('productsViewContainer');
+    if (!container) return;
+
+    container.innerHTML = `
       <!-- Filters Bar -->
       <div class="card no-print" style="margin-bottom:16px;">
         <div class="card-body" style="padding:14px 20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
@@ -58,15 +102,199 @@ const Products = {
         </div>
       </div>
     `;
-    await this.loadList();
+    this.applyFilters();
   },
 
-  async loadList() {
+  renderMatrixView() {
+    const container = document.getElementById('productsViewContainer');
+    if (!container) return;
+
+    const categories = ['All Categories', 'HDPE Pipes', 'Heavy Duty Sacks', 'Fittings & Accessories', 'General'];
+
+    const catTabs = categories.map(cat => {
+      const active = (this.matrixCategory.toLowerCase() === cat.toLowerCase() || (this.matrixCategory === 'all' && cat === 'All Categories'));
+      return `
+        <button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}" onclick="Products.setMatrixCategory('${cat}')">
+          ${cat}
+        </button>
+      `;
+    }).join('');
+
+    const filtered = this.products.filter(p => {
+      if (this.matrixCategory === 'all' || this.matrixCategory === 'All Categories') return true;
+      return (p.category || 'General').toLowerCase() === this.matrixCategory.toLowerCase();
+    });
+
+    const rows = filtered.map((p, idx) => {
+      const retail = parseFloat(p.price || 0);
+      const ws = p.wholesale_price !== null && p.wholesale_price !== undefined ? parseFloat(p.wholesale_price) : '';
+      const dist = p.distributor_price !== null && p.distributor_price !== undefined ? parseFloat(p.distributor_price) : '';
+
+      return `
+        <tr data-prod-id="${p.id}">
+          <td style="font-size:0.85rem; font-weight:600;">
+            ${Utils.escapeHtml(p.name)}
+            ${p.barcode ? `<div style="font-size:0.7rem; color:#94a3b8;">${Utils.escapeHtml(p.barcode)}</div>` : ''}
+          </td>
+          <td><span class="badge badge-secondary" style="font-size:0.75rem;">${Utils.escapeHtml(p.category || 'General')}</span></td>
+          <td>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span style="font-size:0.8rem; color:#64748b;">KES</span>
+              <input type="number" step="0.01" class="form-control matrix-retail" id="mat-retail-${p.id}" value="${retail}" style="width:110px; font-weight:600;" oninput="Products.recalcRowTiers('${p.id}')" />
+            </div>
+          </td>
+          <td>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span style="font-size:0.8rem; color:#0284c7;">KES</span>
+              <input type="number" step="0.01" class="form-control matrix-ws" id="mat-ws-${p.id}" value="${ws}" placeholder="Std (${retail})" style="width:110px; color:#0284c7; font-weight:600;" />
+            </div>
+          </td>
+          <td>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <span style="font-size:0.8rem; color:#7c3aed;">KES</span>
+              <input type="number" step="0.01" class="form-control matrix-dist" id="mat-dist-${p.id}" value="${dist}" placeholder="Std (${retail})" style="width:110px; color:#7c3aed; font-weight:600;" />
+            </div>
+          </td>
+          <td class="text-right">
+            <div style="display:flex; gap:4px; justify-content:flex-end;">
+              <button class="btn btn-xs btn-outline" onclick="Products.setRowTierDiscount('${p.id}', 10, 20)" title="Set WS -10%, Dist -20%">
+                -10% / -20%
+              </button>
+              <button class="btn btn-xs btn-outline" onclick="Products.setRowTierDiscount('${p.id}', 15, 25)" title="Set WS -15%, Dist -25%">
+                -15% / -25%
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    container.innerHTML = `
+      <!-- Category Matrix Filter Bar -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body" style="padding:14px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            ${catTabs}
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <div style="font-size:0.8rem; font-weight:600; color:#475569;">Quick Fill in Category:</div>
+            <button class="btn btn-sm btn-outline" onclick="Products.bulkApplyCategoryDiscount(10, 20)">
+              Set All WS -10% / Dist -20%
+            </button>
+            <button class="btn btn-sm btn-outline" onclick="Products.bulkApplyCategoryDiscount(15, 25)">
+              Set All WS -15% / Dist -25%
+            </button>
+            <button class="btn btn-sm btn-success" onclick="Products.saveCategoricalPricesMatrix()" style="padding:8px 20px; font-weight:600;">
+              <i class="bi bi-check-circle-fill"></i> Save Category Tier Prices
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Price Matrix Table -->
+      <div class="card">
+        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-weight:600;"><i class="bi bi-table"></i> Categorical Tier Price Matrix (Per Product)</span>
+          <span class="badge badge-secondary">${filtered.length} products listed</span>
+        </div>
+        <div class="card-body" style="padding:0; overflow-x:auto;">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:30%;">Product Description</th>
+                <th style="width:15%;">Category</th>
+                <th style="width:18%;">Retailer Price</th>
+                <th style="width:18%;">Wholesaler Price</th>
+                <th style="width:18%;">Distributor Price</th>
+                <th style="width:15%;" class="text-right">Quick Apply</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows || '<tr><td colspan="6" class="text-center" style="padding:24px; color:#64748b;">No products in this category</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-footer" style="padding:14px 20px; background:#f8fafc; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:0.85rem; color:#64748b;">All updates saved here directly apply to New Sale when customer tier is selected.</span>
+          <button class="btn btn-primary" onclick="Products.saveCategoricalPricesMatrix()" style="padding:10px 24px; font-weight:600;">
+            <i class="bi bi-save"></i> Save All Tier Prices
+          </button>
+        </div>
+      </div>
+    `;
+  },
+
+  setMatrixCategory(cat) {
+    this.matrixCategory = (cat === 'All Categories') ? 'all' : cat;
+    this.renderMatrixView();
+  },
+
+  setRowTierDiscount(prodId, wsPct, distPct) {
+    const retailInput = document.getElementById(`mat-retail-${prodId}`);
+    const wsInput = document.getElementById(`mat-ws-${prodId}`);
+    const distInput = document.getElementById(`mat-dist-${prodId}`);
+    if (!retailInput || !wsInput || !distInput) return;
+
+    const retail = parseFloat(retailInput.value) || 0;
+    wsInput.value = (Math.round(retail * (1 - wsPct / 100) * 100) / 100).toFixed(2);
+    distInput.value = (Math.round(retail * (1 - distPct / 100) * 100) / 100).toFixed(2);
+  },
+
+  recalcRowTiers(prodId) {
+    // If retail price changes, update placeholder
+    const retailInput = document.getElementById(`mat-retail-${prodId}`);
+    const wsInput = document.getElementById(`mat-ws-${prodId}`);
+    const distInput = document.getElementById(`mat-dist-${prodId}`);
+    if (!retailInput) return;
+    const retail = parseFloat(retailInput.value) || 0;
+    if (wsInput) wsInput.placeholder = `Std (${retail})`;
+    if (distInput) distInput.placeholder = `Std (${retail})`;
+  },
+
+  bulkApplyCategoryDiscount(wsPct, distPct) {
+    const filtered = this.products.filter(p => {
+      if (this.matrixCategory === 'all' || this.matrixCategory === 'All Categories') return true;
+      return (p.category || 'General').toLowerCase() === this.matrixCategory.toLowerCase();
+    });
+
+    filtered.forEach(p => {
+      this.setRowTierDiscount(p.id, wsPct, distPct);
+    });
+
+    Utils.toast(`Calculated Wholesale (-${wsPct}%) & Distributor (-${distPct}%) for ${filtered.length} products in ${this.matrixCategory}`, 'info');
+  },
+
+  async saveCategoricalPricesMatrix() {
+    const rows = document.querySelectorAll('#productsViewContainer tr[data-prod-id]');
+    if (!rows.length) return Utils.toast('No products to update', 'warning');
+
+    const updates = [];
+    rows.forEach(tr => {
+      const id = tr.getAttribute('data-prod-id');
+      const retailInput = tr.querySelector('.matrix-retail');
+      const wsInput = tr.querySelector('.matrix-ws');
+      const distInput = tr.querySelector('.matrix-dist');
+
+      if (id && retailInput) {
+        updates.push({
+          id,
+          price: parseFloat(retailInput.value) || 0,
+          wholesale_price: wsInput?.value ? parseFloat(wsInput.value) : null,
+          distributor_price: distInput?.value ? parseFloat(distInput.value) : null
+        });
+      }
+    });
+
     try {
+      const res = await DB._fetch('/api/products/bulk-tier-prices', {
+        method: 'POST',
+        body: JSON.stringify({ updates })
+      });
+      Utils.toast(`Saved tier prices for ${res.updatedCount} products successfully!`, 'success');
+      // Refresh internal product list
       this.products = await DB._fetch('/api/products');
-      this.applyFilters();
     } catch (e) {
-      document.getElementById('productList').innerHTML = '<p style="padding:20px; color:#ef4444;">Failed to load products.</p>';
+      Utils.toast(e.message || 'Failed to save tier prices', 'error');
     }
   },
 
@@ -76,20 +304,17 @@ const Products = {
     const stock = document.getElementById('prodStockFilter')?.value || 'all';
 
     this.filteredProducts = this.products.filter(p => {
-      // Category filter
       const pCat = (p.category || '').toLowerCase();
       const pName = (p.name || '').toLowerCase();
       if (cat === 'pipe' && !(pCat.includes('pipe') || pName.includes('pipe') || pCat.includes('hdpe'))) return false;
       if (cat === 'sack' && !(pCat.includes('sack') || pName.includes('sack'))) return false;
       if (cat === 'fitting' && !(pCat.includes('fitting') || pCat.includes('accessory') || pCat.includes('coupler'))) return false;
 
-      // Stock status filter
       const s = parseFloat(p.stock || 0);
       if (stock === 'in_stock' && s <= 0) return false;
       if (stock === 'low_stock' && (s > 10 || s <= 0)) return false;
       if (stock === 'out_of_stock' && s > 0) return false;
 
-      // Text search
       if (query) {
         const barcode = (p.barcode || '').toLowerCase();
         if (!pName.includes(query) && !pCat.includes(query) && !barcode.includes(query)) return false;
@@ -133,21 +358,24 @@ const Products = {
         </tr>`;
     }).join('');
 
-    document.getElementById('productList').innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>Product Description</th>
-            <th>Category</th>
-            <th>Retail Price</th>
-            <th>Wholesale Price</th>
-            <th>Distributor Price</th>
-            <th>Current Stock</th>
-            <th class="text-right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>${html || '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No products matching filter</td></tr>'}</tbody>
-      </table>`;
+    const el = document.getElementById('productList');
+    if (el) {
+      el.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Product Description</th>
+              <th>Category</th>
+              <th>Retail Price</th>
+              <th>Wholesale Price</th>
+              <th>Distributor Price</th>
+              <th>Current Stock</th>
+              <th class="text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>${html || '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No products matching filter</td></tr>'}</tbody>
+        </table>`;
+    }
   },
 
   openModal(id = null) {
