@@ -88,15 +88,39 @@ const POS = {
 
               <div class="form-group" style="margin-bottom:8px;">
                 <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Payment Method</label>
-                <select id="paymentMethod" class="form-control">
+                <select id="paymentMethod" class="form-control" onchange="POS.onPaymentMethodChange()">
                   <option value="mobile_money">M-Pesa / Mobile Money</option>
                   <option value="bank_transfer">Bank Transfer / EFT</option>
                   <option value="cheque">Cheque Deposit</option>
+                  <option value="credit">Credit / Pay on Account (Terms)</option>
+                  <option value="cash">Cash Payment</option>
                 </select>
               </div>
 
+              <!-- Credit Terms & Due Date Section -->
+              <div id="creditTermsSection" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; margin-bottom:12px;">
+                <div style="font-weight:600; font-size:0.8rem; color:#166534; margin-bottom:6px; display:flex; align-items:center; gap:4px;">
+                  <i class="bi bi-clock-history"></i> Credit Terms & Due Date
+                </div>
+                <div class="form-group" style="margin-bottom:8px;">
+                  <label style="font-size:0.75rem; font-weight:600; color:#374151; display:block; margin-bottom:2px;">Credit Period</label>
+                  <select id="creditTermsSelect" class="form-control" onchange="POS.onCreditTermsChange()" style="font-size:0.85rem;">
+                    <option value="30 Days Net" selected>30 Days Net</option>
+                    <option value="7 Days Net">7 Days Net</option>
+                    <option value="14 Days Net">14 Days Net</option>
+                    <option value="60 Days Net">60 Days Net</option>
+                    <option value="90 Days Net">90 Days Net</option>
+                    <option value="Custom">Custom Terms / Due Date</option>
+                  </select>
+                </div>
+                <div class="form-group" style="margin-bottom:4px;">
+                  <label style="font-size:0.75rem; font-weight:600; color:#374151; display:block; margin-bottom:2px;">Payment Due Date</label>
+                  <input type="date" id="creditDueDate" class="form-control" style="font-size:0.85rem;" />
+                </div>
+              </div>
+
               <div class="form-group" style="margin-bottom:12px;">
-                <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Payment Reference (e.g. M-Pesa Code)</label>
+                <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Payment Reference / LPO #</label>
                 <input type="text" id="paymentRef" class="form-control" placeholder="Enter Transaction Ref #" />
               </div>
 
@@ -112,9 +136,61 @@ const POS = {
       </div>
     `;
 
+    await this.loadCategoryPricing();
     await this.loadProducts();
     await this.loadCustomers();
     this.updateCartDisplay();
+  },
+
+  async loadCategoryPricing() {
+    try {
+      const rows = await DB._fetch('/api/category-pricing');
+      this.categoryPricing = {};
+      (rows || []).forEach(r => {
+        this.categoryPricing[(r.category || '').toLowerCase()] = r;
+      });
+    } catch (_) {
+      this.categoryPricing = {};
+    }
+  },
+
+  onPaymentMethodChange() {
+    const method = document.getElementById('paymentMethod')?.value;
+    const creditSec = document.getElementById('creditTermsSection');
+    const payRefInput = document.getElementById('paymentRef');
+    if (creditSec) {
+      if (method === 'credit') {
+        creditSec.style.display = 'block';
+        this.onCreditTermsChange();
+        if (payRefInput && !payRefInput.value) {
+          payRefInput.placeholder = 'e.g. LPO-2026-001 or Account Ref';
+        }
+      } else {
+        creditSec.style.display = 'none';
+        if (payRefInput) {
+          payRefInput.placeholder = 'Enter Transaction Ref #';
+        }
+      }
+    }
+  },
+
+  onCreditTermsChange() {
+    const term = document.getElementById('creditTermsSelect')?.value || '30 Days Net';
+    const dateInput = document.getElementById('creditDueDate');
+    if (!dateInput) return;
+
+    let days = 30;
+    if (term === '7 Days Net') days = 7;
+    else if (term === '14 Days Net') days = 14;
+    else if (term === '30 Days Net') days = 30;
+    else if (term === '60 Days Net') days = 60;
+    else if (term === '90 Days Net') days = 90;
+
+    if (term !== 'Custom') {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      dateInput.value = d.toISOString().split('T')[0];
+    }
   },
 
   onVatChange() {
@@ -161,11 +237,22 @@ const POS = {
     // 2. Customer tier price
     const cust = this.customers.find(c => c.id === this.selectedCustomer);
     const tier = (cust?.customer_type || 'retailer').toLowerCase();
-    if (tier === 'distributor' && p.distributor_price !== null && p.distributor_price !== undefined && p.distributor_price !== '') {
-      return parseFloat(p.distributor_price);
-    }
-    if (tier === 'wholesaler' && p.wholesale_price !== null && p.wholesale_price !== undefined && p.wholesale_price !== '') {
-      return parseFloat(p.wholesale_price);
+    if (tier === 'distributor') {
+      if (p.distributor_price !== null && p.distributor_price !== undefined && p.distributor_price !== '') {
+        return parseFloat(p.distributor_price);
+      }
+      const catRule = this.categoryPricing?.[(p.category || '').toLowerCase()];
+      if (catRule && catRule.distributor_discount_pct) {
+        return Math.round((p.price * (1 - catRule.distributor_discount_pct / 100)) * 100) / 100;
+      }
+    } else if (tier === 'wholesaler') {
+      if (p.wholesale_price !== null && p.wholesale_price !== undefined && p.wholesale_price !== '') {
+        return parseFloat(p.wholesale_price);
+      }
+      const catRule = this.categoryPricing?.[(p.category || '').toLowerCase()];
+      if (catRule && catRule.wholesale_discount_pct) {
+        return Math.round((p.price * (1 - catRule.wholesale_discount_pct / 100)) * 100) / 100;
+      }
     }
     // 3. Standard Retail Price
     return parseFloat(p.price || 0);
@@ -398,9 +485,20 @@ const POS = {
     if (this.cart.length === 0) return Utils.toast('Cart is empty. Add products first.', 'warning');
 
     const paymentMethod = document.getElementById('paymentMethod')?.value || 'mobile_money';
-    const paymentRef = document.getElementById('paymentRef')?.value.trim() || '';
+    let paymentRef = document.getElementById('paymentRef')?.value.trim() || '';
+    const creditTerms = document.getElementById('creditTermsSelect')?.value || '30 Days Net';
+    const creditDueDate = document.getElementById('creditDueDate')?.value || '';
 
-    if (!paymentRef) return Utils.toast('Enter payment transaction reference number', 'warning');
+    if (paymentMethod === 'credit') {
+      if (!this.selectedCustomer) {
+        return Utils.toast('Please select a registered customer to create a credit sale.', 'warning');
+      }
+      if (!paymentRef) {
+        paymentRef = `CREDIT-${creditTerms.toUpperCase().replace(/[^A-Z0-9]/g, '-')}`;
+      }
+    } else {
+      if (!paymentRef) return Utils.toast('Enter payment transaction reference number', 'warning');
+    }
 
     try {
       const customerObj = this.customers?.find(c => c.id === this.selectedCustomer);
@@ -419,7 +517,9 @@ const POS = {
           paymentMethod,
           payment_reference: paymentRef,
           customer_id: this.selectedCustomer || null,
-          vat_rate: vatRate
+          vat_rate: vatRate,
+          credit_terms: paymentMethod === 'credit' ? creditTerms : null,
+          due_date: paymentMethod === 'credit' ? creditDueDate : null
         })
       });
 
@@ -437,14 +537,17 @@ const POS = {
       // Deep link to pending payments screen
       const pendingUrl = `${window.location.origin}/#pending-payments`;
 
+      const paymentInfoText = paymentMethod === 'credit'
+        ? `*Payment Method:* CREDIT SALE\n*Credit Terms:* ${creditTerms}\n*Payment Due Date:* ${creditDueDate || 'On Account'}\n*Ref / LPO:* ${paymentRef}\n`
+        : `*Payment Method:* ${paymentMethod.replace('_', ' ').toUpperCase()}\n*Reference No:* ${paymentRef}\n`;
+
       const fullMessage = encodeURIComponent(
         `*New Sale Submitted for Approval*\n\n` +
         `*Sale ID:* ${sale.id.slice(0, 8)}\n` +
         `*Branch:* ${branchName}\n` +
         `*Date:* ${dateTime}\n` +
         `*Customer:* ${customerName}\n` +
-        `*Payment Method:* ${paymentMethod.replace('_', ' ').toUpperCase()}\n` +
-        `*Reference No:* ${paymentRef}\n` +
+        paymentInfoText +
         `*Subtotal:* KES ${Utils.formatCurrency(sale.subtotal || 0)}\n` +
         `*VAT (${(sale.vat_rate || 0) * 100}%):* KES ${Utils.formatCurrency(sale.vat_amount || 0)}\n` +
         `*Grand Total:* KES ${Utils.formatCurrency(sale.total)}\n\n` +
@@ -466,6 +569,8 @@ const POS = {
         total: sale.total,
         paymentMethod,
         payment_reference: paymentRef,
+        credit_terms: paymentMethod === 'credit' ? creditTerms : null,
+        due_date: paymentMethod === 'credit' ? creditDueDate : null,
         payment_status: 'pending_payment',
         customer_name: customerName,
         customer_kra_pin: customerObj?.kra_pin,

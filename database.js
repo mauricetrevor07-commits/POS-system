@@ -156,6 +156,8 @@ async function init() {
       total REAL NOT NULL,
       paymentMethod TEXT DEFAULT 'mobile_money',
       payment_reference TEXT,
+      credit_terms TEXT,
+      due_date DATE,
       payment_status TEXT DEFAULT 'pending_payment',
       status TEXT DEFAULT 'completed',
       sync_error TEXT,
@@ -167,6 +169,34 @@ async function init() {
   try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS subtotal REAL"); } catch (_) {}
   try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS vat_rate REAL DEFAULT 0.16"); } catch (_) {}
   try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS vat_amount REAL DEFAULT 0"); } catch (_) {}
+  try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS credit_terms TEXT"); } catch (_) {}
+  try { await query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS due_date DATE"); } catch (_) {}
+
+  // ── Category Tier Pricing Rules ─────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS category_tier_pricing (
+      category TEXT PRIMARY KEY,
+      wholesale_discount_pct REAL DEFAULT 10,
+      distributor_discount_pct REAL DEFAULT 15,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // Seed default category tier rules if not exists
+  const defaultCats = [
+    { cat: 'HDPE Pipes', ws: 10, dist: 20 },
+    { cat: 'Heavy Duty Sacks', ws: 8, dist: 15 },
+    { cat: 'Fittings & Accessories', ws: 12, dist: 22 },
+    { cat: 'General', ws: 5, dist: 10 }
+  ];
+  for (const c of defaultCats) {
+    try {
+      await query(
+        `INSERT INTO category_tier_pricing (category, wholesale_discount_pct, distributor_discount_pct)
+         VALUES ($1, $2, $3) ON CONFLICT (category) DO NOTHING`,
+        [c.cat, c.ws, c.dist]
+      );
+    } catch (_) {}
+  }
 
   // ── Sale Items ────────────────────────
   await query(`

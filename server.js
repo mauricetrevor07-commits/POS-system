@@ -201,7 +201,51 @@ app.post('/api/settings', authMiddleware, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Apply Category Pricing Tiers (admin only) ──
+// ─── Category Tier Pricing (admin only) ──
+app.get('/api/category-pricing', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM category_tier_pricing ORDER BY category');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/category-pricing', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { category, wholesale_discount_pct, distributor_discount_pct } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+
+    const wsPct = parseFloat(wholesale_discount_pct) || 0;
+    const distPct = parseFloat(distributor_discount_pct) || 0;
+
+    await db.query(
+      `INSERT INTO category_tier_pricing (category, wholesale_discount_pct, distributor_discount_pct, updated_at)
+       VALUES ($1, $2, $3, NOW())
+       ON CONFLICT (category) DO UPDATE SET
+         wholesale_discount_pct = $2,
+         distributor_discount_pct = $3,
+         updated_at = NOW()`,
+      [category, wsPct, distPct]
+    );
+
+    // Apply to all products in that category
+    let updateSql = `
+      UPDATE products 
+      SET wholesale_price = ROUND((price * (1 - $1::numeric / 100))::numeric, 2),
+          distributor_price = ROUND((price * (1 - $2::numeric / 100))::numeric, 2),
+          updated_at = NOW()
+    `;
+    let params = [wsPct, distPct];
+
+    if (category !== 'ALL') {
+      updateSql += ` WHERE LOWER(category) = LOWER($3)`;
+      params.push(category);
+    }
+
+    const result = await db.query(updateSql, params);
+    res.json({ success: true, updatedProductsCount: result.rowCount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.post('/api/settings/apply-category-pricing', authMiddleware, adminOnly, async (req, res) => {
   try {
     const { category, wholesale_discount_pct, distributor_discount_pct } = req.body;
@@ -210,7 +254,6 @@ app.post('/api/settings/apply-category-pricing', authMiddleware, adminOnly, asyn
     const wsPct = parseFloat(wholesale_discount_pct) || 0;
     const distPct = parseFloat(distributor_discount_pct) || 0;
 
-    // Save configuration in settings
     const settingsKey = `tier_rule_${category.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     await db.query(
       `INSERT INTO settings (key, value) VALUES ($1, $2)
@@ -218,7 +261,6 @@ app.post('/api/settings/apply-category-pricing', authMiddleware, adminOnly, asyn
       [settingsKey, JSON.stringify({ category, wholesale_discount_pct: wsPct, distributor_discount_pct: distPct })]
     );
 
-    // Apply to all products in that category
     let updateSql = `
       UPDATE products 
       SET wholesale_price = ROUND((price * (1 - $1::numeric / 100))::numeric, 2),
@@ -429,13 +471,25 @@ app.post('/api/customer-prices', authMiddleware, async (req, res) => {
 // ─── Sales (pending payment) ────────────
 app.post('/api/sales', authMiddleware, async (req, res) => {
   try {
-    const { items, paymentMethod, customer_id, payment_reference, vat_rate: reqVatRate } = req.body;
+    const { items, paymentMethod, customer_id, payment_reference: reqPayRef, vat_rate: reqVatRate, credit_terms, due_date } = req.body;
     if (!items || !items.length) return res.status(400).json({ error: 'Cart empty' });
-    const allowedMethods = ['mobile_money','bank_transfer','cheque'];
+    const allowedMethods = ['mobile_money','bank_transfer','cheque','credit','cash'];
     if (!allowedMethods.includes(paymentMethod)) {
       return res.status(400).json({ error: 'Invalid payment method' });
     }
-    if (!payment_reference) return res.status(400).json({ error: 'Payment reference required' });
+
+    if (paymentMethod === 'credit' && !customer_id) {
+      return res.status(400).json({ error: 'A registered customer is required for credit sales' });
+    }
+
+    let payment_reference = reqPayRef?.trim();
+    if (!payment_reference) {
+      if (paymentMethod === 'credit') {
+        payment_reference = `CREDIT-${(credit_terms || 'TERMS').toUpperCase().replace(/[^A-Z0-9]/g, '-')}`;
+      } else {
+        return res.status(400).json({ error: 'Payment reference required' });
+      }
+    }
 
     // Fetch customer details if provided
     let customerType = 'retailer';
@@ -446,6 +500,11 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       }
     }
 
+    // Fetch category pricing rules
+    const catPricingRes = await db.query('SELECT * FROM category_tier_pricing');
+    const catPricingMap = {};
+    catPricingRes.rows.forEach(r => { catPricingMap[(r.category || '').toLowerCase()] = r; });
+
     let subtotal = 0;
     const evaluatedItems = [];
 
@@ -455,14 +514,31 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       const product = prod.rows[0];
       if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
 
-      // Determine price by customer type / custom price
+      // Priority 1: Product specific tier price
       let price = product.price;
-      if (customerType === 'distributor' && product.distributor_price !== null && product.distributor_price !== undefined) {
-        price = product.distributor_price;
-      } else if (customerType === 'wholesaler' && product.wholesale_price !== null && product.wholesale_price !== undefined) {
-        price = product.wholesale_price;
+      if (customerType === 'distributor') {
+        if (product.distributor_price !== null && product.distributor_price !== undefined) {
+          price = product.distributor_price;
+        } else {
+          // Priority 2: Category level tier discount
+          const catRule = catPricingMap[(product.category || '').toLowerCase()];
+          if (catRule && catRule.distributor_discount_pct) {
+            price = Math.round((product.price * (1 - catRule.distributor_discount_pct / 100)) * 100) / 100;
+          }
+        }
+      } else if (customerType === 'wholesaler') {
+        if (product.wholesale_price !== null && product.wholesale_price !== undefined) {
+          price = product.wholesale_price;
+        } else {
+          // Priority 2: Category level tier discount
+          const catRule = catPricingMap[(product.category || '').toLowerCase()];
+          if (catRule && catRule.wholesale_discount_pct) {
+            price = Math.round((product.price * (1 - catRule.wholesale_discount_pct / 100)) * 100) / 100;
+          }
+        }
       }
 
+      // Priority 0 (Highest): Individual customer custom negotiated price
       if (customer_id) {
         const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
         if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
@@ -484,9 +560,9 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
 
     const saleId = randomUUID();
     await db.query(
-      `INSERT INTO sales (id, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, payment_status, status, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending_payment','completed',$10)`,
-      [saleId, BRANCH_ID, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, req.user.username]
+      `INSERT INTO sales (id, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, credit_terms, due_date, payment_status, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_payment','completed',$12)`,
+      [saleId, BRANCH_ID, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, credit_terms || null, due_date || null, req.user.username]
     );
 
     for (const item of evaluatedItems) {
@@ -503,6 +579,8 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       vat_amount: vatAmount,
       total,
       paymentMethod,
+      credit_terms: credit_terms || null,
+      due_date: due_date || null,
       payment_status: 'pending_payment',
       message: 'Payment pending admin approval'
     });

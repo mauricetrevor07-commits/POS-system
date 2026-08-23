@@ -206,8 +206,17 @@ const Utils = {
               <td style="width:25%;">
                 <div class="meta-label">Payment Method:</div>
                 <div class="meta-value">${paymentMethod}</div>
-                <div class="meta-label" style="margin-top:6px;">Ref No:</div>
-                <div class="meta-value" style="font-size:11px;">${paymentRef}</div>
+                ${sale.credit_terms ? `
+                  <div class="meta-label" style="margin-top:6px; color:#166534;">Credit Terms:</div>
+                  <div class="meta-value" style="font-size:11px; font-weight:700; color:#166534;">${Utils.escapeHtml(sale.credit_terms)}</div>
+                  ${sale.due_date ? `
+                    <div class="meta-label" style="margin-top:4px; color:#dc2626;">Payment Due Date:</div>
+                    <div class="meta-value" style="font-size:11px; font-weight:700; color:#dc2626;">${new Date(sale.due_date).toLocaleDateString()}</div>
+                  ` : ''}
+                ` : `
+                  <div class="meta-label" style="margin-top:6px;">Ref No:</div>
+                  <div class="meta-value" style="font-size:11px;">${paymentRef}</div>
+                `}
               </td>
             </tr>
           </table>
