@@ -50,6 +50,13 @@ function adminOnly(req, res, next) {
   next();
 }
 
+function getClientIp(req) {
+  let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                 req.socket.remoteAddress || '';
+  if (clientIp.startsWith('::ffff:')) clientIp = clientIp.substring(7);
+  return clientIp;
+}
+
 // ─── Login ─────────────────────────────
 app.post('/api/login', async (req, res) => {
   try {
@@ -68,41 +75,59 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // ─── Optional IP Restriction (only when ENABLE_IP_RESTRICTION=true) ───
-    // Disabled by default so the system works on Render and remote deployments.
-    // Set ENABLE_IP_RESTRICTION=true and BRANCH_ALLOWED_IPS=x.x.x.x in .env
-    // to restrict staff logins to specific network IPs.
-    if (process.env.ENABLE_IP_RESTRICTION === 'true' && user.rows[0].role === 'staff') {
-      let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                     req.socket.remoteAddress || '';
+    // ─── Dynamic IP Restriction Check (managed by Admin) ───
+    if (user.rows[0].role === 'staff') {
+      const ipSetting = await db.query("SELECT value FROM settings WHERE key = 'ip_restriction_enabled'");
+      const isIpRestricted = ipSetting.rows.length ? (ipSetting.rows[0].value === 'true') : (process.env.ENABLE_IP_RESTRICTION === 'true');
 
-      if (clientIp.startsWith('::ffff:')) clientIp = clientIp.substring(7);
+      if (isIpRestricted) {
+        const clientIp = getClientIp(req);
+        const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' ||
+                        clientIp === 'localhost'  || clientIp === '' ||
+                        clientIp.startsWith('192.168.') || clientIp.startsWith('10.') ||
+                        clientIp.startsWith('172.');
 
-      const allowedIPs = (process.env.BRANCH_ALLOWED_IPS || '')
-                          .split(',')
-                          .map(ip => ip.trim().replace(/^::ffff:/, ''))
-                          .filter(Boolean);
+        let allowedIps = [];
+        const ipListSetting = await db.query("SELECT value FROM settings WHERE key = 'branch_allowed_ips'");
+        if (ipListSetting.rows.length && ipListSetting.rows[0].value) {
+          try {
+            const parsed = JSON.parse(ipListSetting.rows[0].value);
+            if (Array.isArray(parsed)) {
+              allowedIps = parsed.map(item => typeof item === 'string' ? item.trim() : item.ip?.trim()).filter(Boolean);
+            }
+          } catch (_) {
+            allowedIps = ipListSetting.rows[0].value.split(',').map(s => s.trim()).filter(Boolean);
+          }
+        }
+        if (!allowedIps.length && process.env.BRANCH_ALLOWED_IPS) {
+          allowedIps = process.env.BRANCH_ALLOWED_IPS.split(',').map(s => s.trim()).filter(Boolean);
+        }
 
-      const isLocal = clientIp === '127.0.0.1' || clientIp === '::1' ||
-                      clientIp === 'localhost'  || clientIp === '' ||
-                      clientIp.startsWith('192.168.') || clientIp.startsWith('10.') ||
-                      clientIp.startsWith('172.');
-
-      if (!isLocal && allowedIPs.length && !allowedIPs.includes(clientIp)) {
-        return res.status(403).json({
-          error: `Access denied. Your IP (${clientIp}) is not permitted at this branch.`
-        });
+        if (!isLocal && allowedIps.length && !allowedIps.includes(clientIp)) {
+          return res.status(403).json({
+            error: `Access denied. Your IP (${clientIp}) is not permitted at this branch. Contact your Administrator.`
+          });
+        }
       }
     }
     // ──────────────────────────────────────────────────────────────────────
 
+    const userBranchId = user.rows[0].branch_id || (user.rows[0].role === 'admin' ? null : 1);
+
     const token = jwt.sign(
-      { id: user.rows[0].id, username: user.rows[0].username, role: user.rows[0].role },
+      { id: user.rows[0].id, username: user.rows[0].username, role: user.rows[0].role, branch_id: userBranchId },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    res.json({ token, role: user.rows[0].role, username: user.rows[0].username, name: user.rows[0].name, id: user.rows[0].id });
+    res.json({
+      token,
+      role: user.rows[0].role,
+      username: user.rows[0].username,
+      name: user.rows[0].name,
+      id: user.rows[0].id,
+      branch_id: userBranchId
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -112,7 +137,7 @@ app.post('/api/login', async (req, res) => {
 // ─── Users (Admin Only) ────────────────
 app.get('/api/users', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const result = await db.query('SELECT id, username, role, name, branch_id, created_at FROM users');
+    const result = await db.query('SELECT id, username, role, name, branch_id, created_at FROM users ORDER BY created_at DESC');
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -130,7 +155,7 @@ app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
       fields.push(`username=$${idx++}`); vals.push(username);
       fields.push(`role=$${idx++}`); vals.push(role);
       if (name !== undefined) { fields.push(`name=$${idx++}`); vals.push(name); }
-      if (branch_id !== undefined) { fields.push(`branch_id=$${idx++}`); vals.push(branch_id); }
+      if (branch_id !== undefined) { fields.push(`branch_id=$${idx++}`); vals.push(branch_id ? parseInt(branch_id) : null); }
       if (password) {
         const hash = bcrypt.hashSync(password, 10);
         fields.push(`password=$${idx++}`); vals.push(hash);
@@ -145,7 +170,7 @@ app.post('/api/users', authMiddleware, adminOnly, async (req, res) => {
       const hash = bcrypt.hashSync(password, 10);
       await db.query(
         'INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)',
-        [newId, username, hash, role, name || null, branch_id || null]
+        [newId, username, hash, role, name || null, branch_id ? parseInt(branch_id) : null]
       );
     }
     res.json({ success: true });
@@ -159,14 +184,27 @@ app.delete('/api/users/:id', authMiddleware, adminOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Branches ───────────────────────────
+app.get('/api/branches', authMiddleware, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM branches ORDER BY id');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Branch Info ────────────────────────
 app.get('/api/branch', authMiddleware, async (req, res) => {
   try {
+    const activeBranchId = req.user.role === 'staff'
+      ? (req.user.branch_id || BRANCH_ID)
+      : (parseInt(req.query.branch_id) || req.user.branch_id || BRANCH_ID);
+
+    const bRes = await db.query('SELECT * FROM branches WHERE id = $1', [activeBranchId]);
+    const branchInfo = bRes.rows.length ? bRes.rows[0] : { id: activeBranchId, name: `Branch ${activeBranchId}` };
     const waSetting = await db.query("SELECT value FROM settings WHERE key = 'admin_whatsapp_number'");
     const whatsapp = waSetting.rows.length ? waSetting.rows[0].value : (process.env.ADMIN_WHATSAPP_NUMBER || '+254700000000');
     res.json({
-      id: BRANCH_ID,
-      name: process.env.BRANCH_NAME || `Branch ${BRANCH_ID}`,
+      ...branchInfo,
       whatsapp
     });
   } catch (err) {
@@ -197,6 +235,53 @@ app.post('/api/settings', authMiddleware, adminOnly, async (req, res) => {
        ON CONFLICT (key) DO UPDATE SET value = $2`,
       [key, value]
     );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── IP Security Settings (admin only) ──
+app.get('/api/settings/ip-security', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const clientIp = getClientIp(req);
+    const enabledRes = await db.query("SELECT value FROM settings WHERE key = 'ip_restriction_enabled'");
+    const enabled = enabledRes.rows.length ? enabledRes.rows[0].value === 'true' : false;
+
+    const listRes = await db.query("SELECT value FROM settings WHERE key = 'branch_allowed_ips'");
+    let allowedIps = [];
+    if (listRes.rows.length && listRes.rows[0].value) {
+      try {
+        const parsed = JSON.parse(listRes.rows[0].value);
+        if (Array.isArray(parsed)) allowedIps = parsed;
+      } catch (_) {
+        allowedIps = listRes.rows[0].value.split(',').map(ip => ({ ip: ip.trim(), label: 'Allowed IP', added_at: new Date().toISOString() })).filter(x => x.ip);
+      }
+    }
+    res.json({
+      enabled,
+      current_ip: clientIp,
+      allowed_ips: allowedIps
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/settings/ip-security', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { enabled, allowed_ips } = req.body;
+    if (enabled !== undefined) {
+      await db.query(
+        `INSERT INTO settings (key, value) VALUES ('ip_restriction_enabled', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [enabled ? 'true' : 'false']
+      );
+    }
+    if (allowed_ips !== undefined) {
+      const jsonVal = typeof allowed_ips === 'string' ? allowed_ips : JSON.stringify(allowed_ips);
+      await db.query(
+        `INSERT INTO settings (key, value) VALUES ('branch_allowed_ips', $1)
+         ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [jsonVal]
+      );
+    }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -282,14 +367,32 @@ app.post('/api/settings/apply-category-pricing', authMiddleware, adminOnly, asyn
 // ─── Products ──────────────────────────
 app.get('/api/products', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM products ORDER BY name');
+    const isStaff = req.user.role === 'staff';
+    const branchId = isStaff ? (req.user.branch_id || 1) : (parseInt(req.query.branch_id) || req.user.branch_id || 1);
+
+    const result = await db.query(
+      `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock, COALESCE(bs.stock, 0)::real AS branch_stock
+       FROM products p
+       LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+       ORDER BY p.name`,
+      [branchId]
+    );
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.get('/api/products/:id', authMiddleware, async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM products WHERE id = $1', [req.params.id]);
+    const isStaff = req.user.role === 'staff';
+    const branchId = isStaff ? (req.user.branch_id || 1) : (parseInt(req.query.branch_id) || req.user.branch_id || 1);
+
+    const result = await db.query(
+      `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock
+       FROM products p
+       LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+       WHERE p.id = $2`,
+      [branchId, req.params.id]
+    );
     if (!result.rows.length) return res.status(404).json({ error: 'Product not found' });
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -298,7 +401,10 @@ app.get('/api/products/:id', authMiddleware, async (req, res) => {
 app.post('/api/products', authMiddleware, adminOnly, async (req, res) => {
   try {
     const id = randomUUID();
-    const { name, price, wholesale_price, distributor_price, barcode, category, stock } = req.body;
+    const { name, price, wholesale_price, distributor_price, barcode, category, stock, branch_id } = req.body;
+    const initialStock = parseFloat(stock) || 0;
+    const targetBranch = parseInt(branch_id) || 1;
+
     await db.query(
       `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, barcode, category) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [
@@ -307,12 +413,24 @@ app.post('/api/products', authMiddleware, adminOnly, async (req, res) => {
         parseFloat(price) || 0,
         wholesale_price !== undefined && wholesale_price !== null && wholesale_price !== '' ? parseFloat(wholesale_price) : null,
         distributor_price !== undefined && distributor_price !== null && distributor_price !== '' ? parseFloat(distributor_price) : null,
-        stock || 0,
+        initialStock,
         barcode || null,
         category || null
       ]
     );
-    res.status(201).json({ id, ...req.body, stock: stock || 0 });
+
+    // Initialize branch_stock for all branches
+    const branches = await db.query("SELECT id FROM branches");
+    for (const b of branches.rows) {
+      const bStock = b.id === targetBranch ? initialStock : 0;
+      await db.query(
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = $3`,
+        [b.id, id, bStock]
+      );
+    }
+
+    res.status(201).json({ id, ...req.body, stock: initialStock });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -333,6 +451,16 @@ app.put('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
       const set = Object.keys(data).map((k, i) => `"${k}"=$${i+1}`).join(',');
       const vals = Object.values(data);
       await db.query(`UPDATE products SET ${set}, updated_at=NOW() WHERE id=$${vals.length+1}`, [...vals, req.params.id]);
+
+      // If stock was provided, update branch_stock for the specified branch
+      if (data.stock !== undefined && data.stock !== null) {
+        const targetBranch = parseInt(req.body.branch_id) || 1;
+        await db.query(
+          `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+           ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = $3`,
+          [targetBranch, req.params.id, data.stock]
+        );
+      }
     }
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -340,6 +468,7 @@ app.put('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
 
 app.delete('/api/products/:id', authMiddleware, adminOnly, async (req, res) => {
   try {
+    await db.query('DELETE FROM branch_stock WHERE product_id = $1', [req.params.id]);
     await db.query('DELETE FROM products WHERE id=$1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -375,14 +504,15 @@ app.post('/api/products/bulk-tier-prices', authMiddleware, adminOnly, async (req
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Import Stock in Bulk (Adds to existing stock) ──
+// ─── Import Stock in Bulk (Adds to existing branch stock) ──
 app.post('/api/products/import-stock', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const { items } = req.body;
+    const { items, branch_id } = req.body;
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ error: 'No items provided for stock import' });
     }
 
+    const targetBranch = parseInt(branch_id) || 1;
     let updatedCount = 0;
     let totalStockAdded = 0;
 
@@ -390,25 +520,24 @@ app.post('/api/products/import-stock', authMiddleware, adminOnly, async (req, re
       const addStock = parseFloat(item.stock_to_add ?? item.add_stock ?? item.quantity ?? 0);
       if (isNaN(addStock) || addStock <= 0) continue;
 
-      let result;
-      if (item.id) {
-        result = await db.query(
-          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2 RETURNING id',
-          [addStock, item.id]
-        );
-      } else if (item.barcode) {
-        result = await db.query(
-          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE barcode = $2 RETURNING id',
-          [addStock, item.barcode]
-        );
-      } else if (item.name) {
-        result = await db.query(
-          'UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE LOWER(name) = LOWER($2) RETURNING id',
-          [addStock, item.name.trim()]
-        );
+      let prodId = item.id;
+      if (!prodId) {
+        if (item.barcode) {
+          const r = await db.query('SELECT id FROM products WHERE barcode = $1', [item.barcode]);
+          if (r.rows.length) prodId = r.rows[0].id;
+        } else if (item.name) {
+          const r = await db.query('SELECT id FROM products WHERE LOWER(name) = LOWER($1)', [item.name.trim()]);
+          if (r.rows.length) prodId = r.rows[0].id;
+        }
       }
 
-      if (result && result.rowCount > 0) {
+      if (prodId) {
+        await db.query(
+          `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+           ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock + $3`,
+          [targetBranch, prodId, addStock]
+        );
+        await db.query('UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2', [addStock, prodId]);
         updatedCount++;
         totalStockAdded += addStock;
       }
@@ -501,7 +630,7 @@ app.post('/api/customer-prices', authMiddleware, async (req, res) => {
 // ─── Sales (pending payment) ────────────
 app.post('/api/sales', authMiddleware, async (req, res) => {
   try {
-    const { items, paymentMethod, customer_id, payment_reference: reqPayRef, vat_rate: reqVatRate, credit_terms, due_date } = req.body;
+    const { items, paymentMethod, customer_id, payment_reference: reqPayRef, vat_rate: reqVatRate, credit_terms, due_date, branch_id: reqBranchId } = req.body;
     if (!items || !items.length) return res.status(400).json({ error: 'Cart empty' });
     const allowedMethods = ['mobile_money','bank_transfer','cheque','credit','cash'];
     if (!allowedMethods.includes(paymentMethod)) {
@@ -511,6 +640,11 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     if (paymentMethod === 'credit' && !customer_id) {
       return res.status(400).json({ error: 'A registered customer is required for credit sales' });
     }
+
+    // Branch assignment: Staff is locked to their branch; Admin can specify branch
+    const saleBranchId = req.user.role === 'staff'
+      ? (req.user.branch_id || 1)
+      : (parseInt(reqBranchId) || req.user.branch_id || BRANCH_ID);
 
     let payment_reference = reqPayRef?.trim();
     if (!payment_reference) {
@@ -539,10 +673,18 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     const evaluatedItems = [];
 
     for (const item of items) {
-      const prod = await db.query('SELECT * FROM products WHERE id=$1', [item.productId]);
+      const prod = await db.query(
+        `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock
+         FROM products p
+         LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+         WHERE p.id = $2`,
+        [saleBranchId, item.productId]
+      );
       if (!prod.rows.length) return res.status(404).json({ error: `Product ${item.productId} not found` });
       const product = prod.rows[0];
-      if (product.stock < item.quantity) return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ error: `Insufficient stock for ${product.name} at Branch ${saleBranchId} (Available: ${product.stock}, Requested: ${item.quantity})` });
+      }
 
       // Priority 1: Product specific tier price
       let price = product.price;
@@ -592,7 +734,7 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     await db.query(
       `INSERT INTO sales (id, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, credit_terms, due_date, payment_status, status, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_payment','completed',$12)`,
-      [saleId, BRANCH_ID, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, credit_terms || null, due_date || null, req.user.username]
+      [saleId, saleBranchId, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, credit_terms || null, due_date || null, req.user.username]
     );
 
     for (const item of evaluatedItems) {
@@ -604,6 +746,7 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
 
     res.status(201).json({
       id: saleId,
+      branch_id: saleBranchId,
       subtotal,
       vat_rate: vatRate,
       vat_amount: vatAmount,
@@ -620,13 +763,28 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
 // ─── Pending Payments (admin only) ─────
 app.get('/api/pending-payments', authMiddleware, adminOnly, async (req, res) => {
   try {
-    const sales = await db.query(`
-      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone
+    const isStaff = req.user.role === 'staff';
+    const userBranch = req.user.branch_id || 1;
+
+    let sql = `
+      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone,
+             b.name AS branch_name
       FROM sales s
       LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN branches b ON s.branch_id = b.id
       WHERE s.payment_status = 'pending_payment'
-      ORDER BY s.timestamp DESC
-    `);
+    `;
+    const params = [];
+    if (isStaff) {
+      sql += ` AND s.branch_id = $1`;
+      params.push(userBranch);
+    } else if (req.query.branch_id) {
+      sql += ` AND s.branch_id = $1`;
+      params.push(parseInt(req.query.branch_id));
+    }
+    sql += ` ORDER BY s.timestamp DESC`;
+
+    const sales = await db.query(sql, params);
     for (let sale of sales.rows) {
       const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [sale.id]);
       sale.items = items.rows;
@@ -639,9 +797,17 @@ app.put('/api/payments/:saleId/approve', authMiddleware, adminOnly, async (req, 
   try {
     const sale = await db.query('SELECT * FROM sales WHERE id = $1', [req.params.saleId]);
     if (!sale.rows.length) return res.status(404).json({ error: 'Sale not found' });
-    // Deduct stock
+    const saleData = sale.rows[0];
+    const saleBranchId = saleData.branch_id || 1;
+
+    // Deduct stock from specific branch in branch_stock
     const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [req.params.saleId]);
     for (const item of items.rows) {
+      await db.query(
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, -$3)
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock - $3`,
+        [saleBranchId, item.productid, item.quantity]
+      );
       await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.productid]);
     }
     await db.query("UPDATE sales SET payment_status = 'approved' WHERE id = $1", [req.params.saleId]);
@@ -656,20 +822,127 @@ app.put('/api/payments/:saleId/reject', authMiddleware, adminOnly, async (req, r
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Credit Alerts (admin only) ─────────
+app.get('/api/credit-alerts', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT s.*, c.name AS customer_name, c.phone AS customer_phone, c.kra_pin AS customer_kra_pin,
+             b.name AS branch_name,
+             (s.due_date - CURRENT_DATE) AS days_until_due
+      FROM sales s
+      LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN branches b ON s.branch_id = b.id
+      WHERE s.paymentMethod = 'credit'
+        AND s.payment_status != 'rejected'
+        AND s.status != 'settled'
+      ORDER BY s.due_date ASC
+    `);
+
+    const saleIds = result.rows.map(s => s.id);
+    if (saleIds.length) {
+      const placeholders = saleIds.map((_, i) => `$${i+1}`).join(',');
+      const items = await db.query(`SELECT * FROM sale_items WHERE saleId IN (${placeholders})`, saleIds);
+      const map = {};
+      items.rows.forEach(it => {
+        if (!map[it.saleid]) map[it.saleid] = [];
+        map[it.saleid].push(it);
+      });
+      result.rows.forEach(s => s.items = map[s.id] || []);
+    } else {
+      result.rows.forEach(s => s.items = []);
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const overdue = [];
+    const dueToday = [];
+    const dueSoon = [];
+    const upcoming = [];
+
+    result.rows.forEach(sale => {
+      const dueDateStr = sale.due_date ? new Date(sale.due_date).toISOString().split('T')[0] : null;
+      if (!dueDateStr) {
+        upcoming.push(sale);
+      } else if (dueDateStr < today) {
+        sale.alert_level = 'overdue';
+        overdue.push(sale);
+      } else if (dueDateStr === today) {
+        sale.alert_level = 'due_today';
+        dueToday.push(sale);
+      } else if (sale.days_until_due <= 3) {
+        sale.alert_level = 'due_soon';
+        dueSoon.push(sale);
+      } else {
+        sale.alert_level = 'upcoming';
+        upcoming.push(sale);
+      }
+    });
+
+    res.json({
+      total_count: result.rows.length,
+      overdue_count: overdue.length,
+      due_today_count: dueToday.length,
+      due_soon_count: dueSoon.length,
+      overdue,
+      due_today: dueToday,
+      due_soon: dueSoon,
+      upcoming,
+      all: result.rows
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Settle / Mark Credit Sale as Paid (admin only)
+app.put('/api/sales/:id/settle-credit', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { payment_reference } = req.body;
+    const saleRes = await db.query('SELECT * FROM sales WHERE id = $1', [req.params.id]);
+    if (!saleRes.rows.length) return res.status(404).json({ error: 'Sale record not found' });
+
+    const ref = payment_reference || `PAID-${new Date().toISOString().slice(0,10)}`;
+    await db.query(
+      `UPDATE sales 
+       SET payment_status = 'approved',
+           status = 'settled',
+           payment_reference = COALESCE(payment_reference || ' | ', '') || $1
+       WHERE id = $2`,
+      [`[Settled: ${ref}]`, req.params.id]
+    );
+
+    res.json({ success: true, message: 'Credit payment settled successfully' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Sales History ─────────────────────
 app.get('/api/sales', authMiddleware, async (req, res) => {
   try {
     const isAdmin = req.user.role === 'admin';
+    const userBranch = req.user.branch_id || 1;
+
     let sql = `
-      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone 
+      SELECT s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin, c.address AS customer_address, c.phone AS customer_phone,
+             b.name AS branch_name
       FROM sales s 
       LEFT JOIN customers c ON s.customer_id = c.id
+      LEFT JOIN branches b ON s.branch_id = b.id
     `;
+    const params = [];
+    let idx = 0;
+
     if (!isAdmin) {
-      sql += " WHERE s.payment_status = 'approved' OR s.created_by = $1";
+      // Strict branch isolation for staff
+      idx++;
+      sql += ` WHERE s.branch_id = $${idx} AND (s.payment_status = 'approved' OR s.created_by = $${idx+1})`;
+      params.push(userBranch, req.user.username);
+    } else {
+      if (req.query.branch_id) {
+        idx++;
+        sql += ` WHERE s.branch_id = $${idx}`;
+        params.push(parseInt(req.query.branch_id));
+      }
     }
+
     sql += " ORDER BY s.timestamp DESC";
-    const sales = await db.query(sql, !isAdmin ? [req.user.username] : []);
+    const sales = await db.query(sql, params);
     const saleIds = sales.rows.map(s => s.id);
     if (saleIds.length) {
       const placeholders = saleIds.map((_, i) => `$${i+1}`).join(',');
@@ -684,110 +957,6 @@ app.get('/api/sales', authMiddleware, async (req, res) => {
       for (const sale of sales.rows) sale.items = [];
     }
     res.json(sales.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ─── Reports (admin only) ──────────────
-app.get('/api/reports/sales-summary', authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const { from, to } = req.query;
-
-    // Base summary (sales count, total amount)
-    let summarySql = `SELECT COUNT(*)::int AS total_sales, COALESCE(SUM(total),0) AS total_amount FROM sales WHERE payment_status = 'approved'`;
-    const summaryParams = [];
-    let idx = 0;
-    if (from) { idx++; summarySql += ` AND timestamp >= $${idx}`; summaryParams.push(from + ' 00:00:00'); }
-    if (to)   { idx++; summarySql += ` AND timestamp <= $${idx}`; summaryParams.push(to + ' 23:59:59'); }
-    const summaryResult = await db.query(summarySql, summaryParams);
-
-    // Products sold breakdown
-    let itemsSql = `
-      SELECT 
-        si.productid,
-        si.productname,
-        COALESCE(p.category, 'General') AS category,
-        SUM(si.quantity)::real AS quantity_sold,
-        SUM(si.quantity * si.price)::real AS total_revenue,
-        AVG(si.price)::real AS avg_price
-      FROM sale_items si
-      JOIN sales s ON si.saleid = s.id
-      LEFT JOIN products p ON si.productid = p.id
-      WHERE s.payment_status = 'approved'
-    `;
-    const itemsParams = [];
-    let itemIdx = 0;
-    if (from) { itemIdx++; itemsSql += ` AND s.timestamp >= $${itemIdx}`; itemsParams.push(from + ' 00:00:00'); }
-    if (to)   { itemIdx++; itemsSql += ` AND s.timestamp <= $${itemIdx}`; itemsParams.push(to + ' 23:59:59'); }
-    itemsSql += ` GROUP BY si.productid, si.productname, p.category ORDER BY quantity_sold DESC`;
-    const itemsResult = await db.query(itemsSql, itemsParams);
-
-    // Calculate total pipes sold
-    let totalPipesSold = 0;
-    let totalSacksSold = 0;
-    for (const item of itemsResult.rows) {
-      const cat = (item.category || '').toLowerCase();
-      const name = (item.productname || '').toLowerCase();
-      if (cat.includes('pipe') || name.includes('pipe') || cat.includes('hdpe')) {
-        totalPipesSold += parseFloat(item.quantity_sold) || 0;
-      } else if (cat.includes('sack') || name.includes('sack')) {
-        totalSacksSold += parseFloat(item.quantity_sold) || 0;
-      }
-    }
-
-    // Stock remaining for all products
-    const stockResult = await db.query('SELECT id, name, category, price, stock FROM products ORDER BY category, name');
-
-    res.json({
-      total_sales: summaryResult.rows[0]?.total_sales || 0,
-      total_amount: summaryResult.rows[0]?.total_amount || 0,
-      total_pipes_sold: totalPipesSold,
-      total_sacks_sold: totalSacksSold,
-      products_sold: itemsResult.rows,
-      stock_remaining: stockResult.rows
-    });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// ─── Transfers (unchanged logic, PostgreSQL syntax) ──
-app.get('/api/transfers', authMiddleware, async (req, res) => {
-  try {
-    const result = await db.query('SELECT * FROM transfers WHERE from_branch_id = $1 OR to_branch_id = $1 ORDER BY created_at DESC', [BRANCH_ID]);
-    res.json(result.rows);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.post('/api/transfers', authMiddleware, async (req, res) => {
-  try {
-    const id = randomUUID();
-    const { to_branch_id, items } = req.body;
-    for (const item of items) {
-      await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.product_id]);
-    }
-    await db.query(
-      "INSERT INTO transfers (id, from_branch_id, to_branch_id, status) VALUES ($1,$2,$3,'pending')",
-      [id, BRANCH_ID, to_branch_id]
-    );
-    for (const item of items) {
-      await db.query('INSERT INTO transfer_items (transfer_id, product_id, quantity) VALUES ($1,$2,$3)',
-        [id, item.product_id, item.quantity]);
-    }
-    res.status(201).json({ id, status: 'pending' });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-app.put('/api/transfers/:id/receive', authMiddleware, async (req, res) => {
-  try {
-    const transfer = await db.query('SELECT * FROM transfers WHERE id = $1 AND to_branch_id = $2', [req.params.id, BRANCH_ID]);
-    if (!transfer.rows.length) return res.status(404).json({ error: 'Transfer not found' });
-    const items = await db.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [req.params.id]);
-    for (const item of items.rows) {
-      await db.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [item.quantity, item.product_id]);
-    }
-    await db.query(
-      "UPDATE transfers SET status = 'received', received_at = NOW() WHERE id = $1",
-      [req.params.id]
-    );
-    res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

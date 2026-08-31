@@ -44,6 +44,23 @@ async function query(text, params, retries = 3) {
  * Run all migrations and seed default data.
  */
 async function init() {
+  // ── Branches ──────────────────────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS branches (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      code TEXT,
+      location TEXT,
+      phone TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  const branchCount = await query("SELECT COUNT(*)::int FROM branches");
+  if (branchCount.rows[0].count === 0) {
+    await query("INSERT INTO branches (id, name, code, location, phone) VALUES (1, 'Nairobi Branch (KPCU Godowns)', 'NRB-01', 'KPCU Godowns – along Komarocks Road- Off Kangundo Road, Nairobi', '+254700000000') ON CONFLICT (id) DO NOTHING");
+    await query("INSERT INTO branches (id, name, code, location, phone) VALUES (2, 'Branch 2', 'BR-02', 'Branch 2 Location', '+254700000001') ON CONFLICT (id) DO NOTHING");
+  }
+
   // ── Users ────────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -61,34 +78,36 @@ async function init() {
   const admin = await query("SELECT id FROM users WHERE LOWER(username) = 'admin'");
   if (admin.rows.length === 0) {
     const hash = bcrypt.hashSync('admin123', 10);
-    await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
-      [randomUUID(), 'admin', hash, 'admin', 'Administrator']);
+    await query("INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)",
+      [randomUUID(), 'admin', hash, 'admin', 'Administrator', null]);
   }
   
   const staff = await query("SELECT id FROM users WHERE LOWER(username) = 'staff'");
   if (staff.rows.length === 0) {
     const hash = bcrypt.hashSync('staff123', 10);
-    await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
-      [randomUUID(), 'staff', hash, 'staff', 'Staff User']);
+    await query("INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)",
+      [randomUUID(), 'staff', hash, 'staff', 'Staff User', 1]);
   } else {
-    // Ensure staff has a known password
+    // Ensure staff has a known password and branch 1
     const hash = bcrypt.hashSync('staff123', 10);
-    await query("UPDATE users SET password = $1, role = 'staff' WHERE LOWER(username) = 'staff'", [hash]);
+    await query("UPDATE users SET password = $1, role = 'staff', branch_id = COALESCE(branch_id, 1) WHERE LOWER(username) = 'staff'", [hash]);
   }
 
   const cashier = await query("SELECT id FROM users WHERE LOWER(username) = 'cashier'");
   if (cashier.rows.length === 0) {
     const hash = bcrypt.hashSync('cashier123', 10);
-    await query("INSERT INTO users (id, username, password, role, name) VALUES ($1,$2,$3,$4,$5)",
-      [randomUUID(), 'cashier', hash, 'staff', 'Cashier User']);
+    await query("INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)",
+      [randomUUID(), 'cashier', hash, 'staff', 'Cashier User', 1]);
+  } else {
+    await query("UPDATE users SET branch_id = COALESCE(branch_id, 1) WHERE LOWER(username) = 'cashier'");
   }
 
-  // If Trevor user exists, ensure password is set to staff123
+  // If Trevor user exists, ensure password is set to staff123 and branch 1
   try {
     const trevor = await query("SELECT id FROM users WHERE LOWER(username) = 'trevor'");
     if (trevor.rows.length > 0) {
       const hash = bcrypt.hashSync('staff123', 10);
-      await query("UPDATE users SET password = $1, role = 'staff' WHERE LOWER(username) = 'trevor'", [hash]);
+      await query("UPDATE users SET password = $1, role = 'staff', branch_id = COALESCE(branch_id, 1) WHERE LOWER(username) = 'trevor'", [hash]);
     }
   } catch (_) {}
 
@@ -103,6 +122,20 @@ async function init() {
   if (setting.rows.length === 0) {
     await query("INSERT INTO settings (key, value) VALUES ('admin_whatsapp_number', $1)",
       [process.env.DEFAULT_WHATSAPP || '+254700000000']);
+  }
+  const ipSetting = await query("SELECT value FROM settings WHERE key = 'ip_restriction_enabled'");
+  if (ipSetting.rows.length === 0) {
+    await query("INSERT INTO settings (key, value) VALUES ('ip_restriction_enabled', 'false')");
+  }
+  const ipListSetting = await query("SELECT value FROM settings WHERE key = 'branch_allowed_ips'");
+  if (ipListSetting.rows.length === 0) {
+    const defaultIps = (process.env.BRANCH_ALLOWED_IPS || '')
+      .split(',')
+      .map(ip => ip.trim())
+      .filter(Boolean)
+      .map(ip => ({ ip, label: 'Default Allowed IP', added_at: new Date().toISOString() }));
+    await query("INSERT INTO settings (key, value) VALUES ('branch_allowed_ips', $1)",
+      [JSON.stringify(defaultIps)]);
   }
 
   // ── Products ─────────────────────────
@@ -294,10 +327,16 @@ async function init() {
       from_branch_id INTEGER NOT NULL,
       to_branch_id INTEGER NOT NULL,
       status TEXT DEFAULT 'pending',
+      notes TEXT,
+      created_by TEXT,
+      received_by TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       received_at TIMESTAMPTZ
     )
   `);
+  try { await query("ALTER TABLE transfers ADD COLUMN IF NOT EXISTS notes TEXT"); } catch (_) {}
+  try { await query("ALTER TABLE transfers ADD COLUMN IF NOT EXISTS created_by TEXT"); } catch (_) {}
+  try { await query("ALTER TABLE transfers ADD COLUMN IF NOT EXISTS received_by TEXT"); } catch (_) {}
 
   await query(`
     CREATE TABLE IF NOT EXISTS transfer_items (
@@ -307,6 +346,33 @@ async function init() {
       quantity REAL NOT NULL
     )
   `);
+
+  // ── Branch-specific Stock Table ─────────
+  await query(`
+    CREATE TABLE IF NOT EXISTS branch_stock (
+      branch_id INTEGER NOT NULL,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      stock REAL DEFAULT 0,
+      PRIMARY KEY (branch_id, product_id)
+    )
+  `);
+
+  // Initialize branch stock for all existing products if empty
+  const prodRows = await query("SELECT id, stock FROM products");
+  for (const p of prodRows.rows) {
+    // Branch 1 (Nairobi) gets current product stock
+    await query(
+      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES (1, $1, $2)
+       ON CONFLICT (branch_id, product_id) DO NOTHING`,
+      [p.id, p.stock || 0]
+    );
+    // Branch 2 gets 0 stock initially if not present
+    await query(
+      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES (2, $1, 0)
+       ON CONFLICT (branch_id, product_id) DO NOTHING`,
+      [p.id]
+    );
+  }
 
   await query(`
     CREATE TABLE IF NOT EXISTS pricing_tiers (

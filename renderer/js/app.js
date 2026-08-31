@@ -24,7 +24,8 @@ async function initApp() {
       role,
       username: localStorage.getItem('username') || '',
       name: localStorage.getItem('userName') || localStorage.getItem('username') || '',
-      id: localStorage.getItem('userId') || ''
+      id: localStorage.getItem('userId') || '',
+      branch_id: parseInt(localStorage.getItem('userBranchId') || '1')
     };
   } catch (e) {
     localStorage.clear();
@@ -63,13 +64,14 @@ function buildSidebar() {
   ];
 
   if (isAdmin) {
-    items.push({ page: 'pending-payments', label: 'Pending Payments', icon: 'bi-hourglass-split' });
+    items.push({ page: 'pending-payments', label: 'Pending & Credit Alerts', icon: 'bi-shield-check' });
     items.push({ page: 'reports',          label: 'Reports',          icon: 'bi-bar-chart' });
     items.push({ page: 'products',         label: 'Products',         icon: 'bi-box-seam' });
   }
 
-  items.push({ page: 'customers', label: 'Customers',     icon: 'bi-person-lines-fill' });
-  items.push({ page: 'sales',     label: 'Sales History', icon: 'bi-receipt' });
+  items.push({ page: 'transfers', label: 'Stock Transfers', icon: 'bi-arrow-left-right' });
+  items.push({ page: 'customers', label: 'Customers',       icon: 'bi-person-lines-fill' });
+  items.push({ page: 'sales',     label: 'Sales History',   icon: 'bi-receipt' });
 
   if (isAdmin) {
     items.push({ page: 'users',    label: 'Users',    icon: 'bi-people-fill' });
@@ -80,12 +82,13 @@ function buildSidebar() {
   const userLi = document.createElement('li');
   userLi.className = 'nav-item';
   userLi.style.cssText = 'padding: 10px 16px; margin-bottom:8px; background:rgba(255,255,255,0.06); border-radius:8px; cursor:default;';
+  const branchLabel = isAdmin ? 'All Branches' : (currentUser.branch_id === 2 ? 'Branch 2' : 'Nairobi Branch');
   userLi.innerHTML = `
     <span style="display:flex;align-items:center;gap:10px;">
       <span style="width:34px;height:34px;border-radius:50%;background:${isAdmin ? '#2563eb' : '#059669'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#fff;flex-shrink:0;">${(currentUser.name || currentUser.username || '?')[0].toUpperCase()}</span>
       <span>
         <div style="font-weight:600;font-size:0.85rem;color:#f1f5f9;">${currentUser.name || currentUser.username}</div>
-        <div style="font-size:0.72rem;color:${isAdmin ? '#93c5fd' : '#6ee7b7'};text-transform:uppercase;letter-spacing:0.5px;">${isAdmin ? 'Administrator' : 'Staff'}</div>
+        <div style="font-size:0.72rem;color:${isAdmin ? '#93c5fd' : '#6ee7b7'};text-transform:uppercase;letter-spacing:0.5px;">${isAdmin ? 'Administrator' : 'Staff'} &bull; ${branchLabel}</div>
       </span>
     </span>`;
   nav.appendChild(userLi);
@@ -143,6 +146,9 @@ async function loadPage(page) {
       break;
     case 'reports':
       await Reports.render();
+      break;
+    case 'transfers':
+      await Transfers.render();
       break;
     case 'users':
       if (typeof Users !== 'undefined') await Users.render();

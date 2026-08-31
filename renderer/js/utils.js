@@ -1,14 +1,14 @@
 const Utils = {
   company: {
     name: 'AUTOPAK INTERNATIONAL',
-    address: 'Plot 123, Industrial Area, Nairobi',
+    address: 'KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi',
     phone: '+254 700 000 000',
     email: 'info@autopak.co.ke'
   },
   companyPrintHeaderHTML: `
     <div id="companyPrintHeader" style="display:none; text-align:center; border-bottom:2px solid #000; margin-bottom:10px;">
       <h2>AUTOPAK INTERNATIONAL</h2>
-      <p>Plot 123, Industrial Area, Nairobi | Tel: +254 700 000 000</p>
+      <p>KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000</p>
     </div>
   `,
   escapeHtml(str) {
@@ -176,7 +176,7 @@ const Utils = {
                 <div class="company-title">AUTOPAK INTERNATIONAL</div>
                 <div class="company-sub">
                   Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks<br>
-                  Plot 123, Industrial Area, Nairobi, Kenya | Tel: +254 700 000 000<br>
+                  KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000<br>
                   Email: info@autopak.co.ke | <strong>Company PIN: P051234567Z</strong>
                 </div>
               </td>
@@ -315,7 +315,7 @@ const Utils = {
                 <div class="company-title">AUTOPAK INTERNATIONAL</div>
                 <div class="company-sub">
                   Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks<br>
-                  Plot 123, Industrial Area, Nairobi, Kenya | Tel: +254 700 000 000<br>
+                  KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000<br>
                   Email: info@autopak.co.ke | PIN: P051234567Z
                 </div>
               </td>
@@ -405,6 +405,114 @@ const Utils = {
             <div class="sign-box">
               <strong>Signature & Official Stamp</strong><br><br>
               ___________________________
+            </div>
+          </div>
+        </div>
+        ${c < copiesCount ? '<div class="page-break"></div>' : ''}
+      `;
+    }
+    return fullHTML;
+  },
+
+  generateTransferNoteHTML(transfer, copiesCount = 1) {
+    let fullHTML = '';
+    let items = transfer.items || [];
+    const trNum = `TRF-${(transfer.id || '').slice(0, 8).toUpperCase()}`;
+    const dateStr = new Date(transfer.created_at || Date.now()).toLocaleString();
+    const fromName = transfer.from_branch_name || `Branch ${transfer.from_branch_id}`;
+    const toName = transfer.to_branch_name || `Branch ${transfer.to_branch_id}`;
+
+    for (let c = 1; c <= copiesCount; c++) {
+      const copyLabel = c === 1 ? 'ORIGINAL (Dispatched)' : c === 2 ? 'DUPLICATE (Store Copy)' : 'TRIPLICATE (Transit Copy)';
+      const rowsHTML = items.map((it, idx) => {
+        const name = it.product_name || it.productname || 'Product';
+        const sku = it.barcode || '';
+        const qty = parseFloat(it.quantity || 0);
+        return `
+          <tr>
+            <td class="text-center">${idx + 1}</td>
+            <td><strong>${Utils.escapeHtml(name)}</strong>${sku ? `<div style="font-size:10px;color:#64748b;">SKU: ${Utils.escapeHtml(sku)}</div>` : ''}</td>
+            <td class="text-center"><strong>${qty}</strong></td>
+            <td>Good Condition</td>
+          </tr>
+        `;
+      }).join('');
+
+      fullHTML += `
+        <div class="doc-container">
+          <table class="header-table">
+            <tr>
+              <td>
+                <div class="company-title">AUTOPAK INTERNATIONAL</div>
+                <div class="company-sub">
+                  Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks<br>
+                  KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000<br>
+                  Email: info@autopak.co.ke
+                </div>
+              </td>
+              <td class="doc-badge">
+                <div class="doc-type" style="background:#0284c7; color:#fff; padding:6px 12px; border-radius:4px; font-weight:700;">INTER-BRANCH STOCK TRANSFER</div>
+                <div class="copy-label">${copyLabel}</div>
+              </td>
+            </tr>
+          </table>
+
+          <table class="meta-box">
+            <tr>
+              <td style="width:35%;">
+                <div class="meta-label">Origin / Source Branch:</div>
+                <div class="meta-value" style="color:#0284c7; font-weight:700;">${Utils.escapeHtml(fromName)}</div>
+                <div style="font-size:11px; margin-top:2px; color:#64748b;">Dispatched By: ${Utils.escapeHtml(transfer.created_by || 'Staff')}</div>
+              </td>
+              <td style="width:35%;">
+                <div class="meta-label">Destination Branch:</div>
+                <div class="meta-value" style="color:#166534; font-weight:700;">${Utils.escapeHtml(toName)}</div>
+                <div style="font-size:11px; margin-top:2px; color:#64748b;">Status: <strong>${(transfer.status || 'PENDING').toUpperCase()}</strong></div>
+              </td>
+              <td style="width:30%;">
+                <div class="meta-label">Transfer Voucher No:</div>
+                <div class="meta-value">${trNum}</div>
+                <div class="meta-label" style="margin-top:6px;">Date & Time:</div>
+                <div class="meta-value" style="font-size:11px;">${dateStr}</div>
+              </td>
+            </tr>
+          </table>
+
+          ${transfer.notes ? `
+            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 12px; margin-bottom:12px; font-size:12px;">
+              <strong>Transfer Notes / Reason:</strong> ${Utils.escapeHtml(transfer.notes)}
+            </div>
+          ` : ''}
+
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th style="width:8%;" class="text-center">#</th>
+                <th style="width:52%;">Item Description / Specification</th>
+                <th style="width:20%;" class="text-center">Transfer Quantity</th>
+                <th style="width:20%;">Condition</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML || '<tr><td colspan="4" class="text-center">No transfer items</td></tr>'}
+            </tbody>
+          </table>
+
+          <div class="sign-grid" style="margin-top:30px;">
+            <div class="sign-box">
+              <strong>Dispatched By (Source Branch)</strong><br><br>
+              ${Utils.escapeHtml(transfer.created_by || 'Staff')}<br>
+              Signature & Date
+            </div>
+            <div class="sign-box">
+              <strong>Transporter / Driver</strong><br><br>
+              Name: ____________________<br>
+              Vehicle: __________________
+            </div>
+            <div class="sign-box">
+              <strong>Received & Verified By (Dest. Branch)</strong><br><br>
+              ${Utils.escapeHtml(transfer.received_by || '____________________')}<br>
+              Signature & Date
             </div>
           </div>
         </div>

@@ -33,19 +33,26 @@ const Users = {
     try {
       this.users = await DB._fetch('/api/users');
       const tbody = document.getElementById('usersTableBody');
-      tbody.innerHTML = this.users.map(u => `
-        <tr>
-          <td>${Utils.escapeHtml(u.name || '-')}</td>
-          <td>${Utils.escapeHtml(u.username)}</td>
-          <td><span class="badge badge-${u.role === 'admin' ? 'primary' : 'secondary'}">${u.role}</span></td>
-          <td>${u.branch_id || '-'}</td>
-          <td>${new Date(u.created_at).toLocaleString()}</td>
-          <td>
-            <button class="btn btn-sm btn-outline" onclick="Users.openModal('${u.id}')">Edit</button>
-            ${u.id !== (currentUser?.id || '') ? `<button class="btn btn-sm btn-danger" onclick="Users.deleteUser('${u.id}')">Delete</button>` : ''}
-          </td>
-        </tr>
-      `).join('') || '<tr><td colspan="6">No users found.</td></tr>';
+      tbody.innerHTML = this.users.map(u => {
+        let bLabel = 'All Branches (Admin)';
+        if (u.branch_id === 1) bLabel = 'Branch 1 (Nairobi - KPCU)';
+        else if (u.branch_id === 2) bLabel = 'Branch 2';
+        else if (u.branch_id) bLabel = `Branch ${u.branch_id}`;
+
+        return `
+          <tr>
+            <td><strong>${Utils.escapeHtml(u.name || '-')}</strong></td>
+            <td>${Utils.escapeHtml(u.username)}</td>
+            <td><span class="badge badge-${u.role === 'admin' ? 'primary' : 'secondary'}">${u.role.toUpperCase()}</span></td>
+            <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;"><i class="bi bi-geo-alt"></i> ${bLabel}</span></td>
+            <td>${new Date(u.created_at).toLocaleString()}</td>
+            <td>
+              <button class="btn btn-sm btn-outline" onclick="Users.openModal('${u.id}')"><i class="bi bi-pencil"></i> Edit</button>
+              ${u.id !== (currentUser?.id || '') ? `<button class="btn btn-sm btn-danger" onclick="Users.deleteUser('${u.id}')"><i class="bi bi-trash"></i></button>` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('') || '<tr><td colspan="6">No users found.</td></tr>';
     } catch (err) {
       Utils.toast('Failed to load users: ' + err.message, 'error');
     }
@@ -57,11 +64,12 @@ const Users = {
     if (existing) existing.remove();
 
     const user = id ? this.users.find(u => u.id === id) : null;
+    const curBranch = user?.branch_id !== undefined && user?.branch_id !== null ? String(user.branch_id) : '';
 
     // Build the modal HTML
     const html = `
       <div class="user-modal-overlay" onclick="if(event.target===this) this.remove()">
-        <div class="user-modal-card" style="max-width: 450px; width: 90%;">
+        <div class="user-modal-card" style="max-width: 480px; width: 90%;">
           <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb;">
             <h3 style="margin:0;">${user ? 'Edit User' : 'Add User'}</h3>
             <button style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:#6b7280;" 
@@ -81,16 +89,22 @@ const Users = {
               <label>Password ${user ? '<small>(leave blank to keep current)</small>' : '<span style="color:red;">*</span>'}</label>
               <input type="password" id="userPassword" class="form-control" placeholder="Password">
             </div>
-            <div class="form-group">
-              <label>Role</label>
-              <select id="userRole" class="form-control">
-                <option value="staff" ${user?.role === 'staff' ? 'selected' : ''}>Staff</option>
-                <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Admin</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Branch ID</label>
-              <input type="number" id="userBranch" class="form-control" value="${user?.branch_id || ''}" placeholder="e.g. 1">
+            <div style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Role</label>
+                <select id="userRole" class="form-control">
+                  <option value="staff" ${user?.role === 'staff' ? 'selected' : ''}>Staff (Branch Isolated)</option>
+                  <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Administrator (Full Access)</option>
+                </select>
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Assigned Branch *</label>
+                <select id="userBranch" class="form-control">
+                  <option value="1" ${curBranch === '1' ? 'selected' : ''}>Branch 1 (Nairobi - KPCU)</option>
+                  <option value="2" ${curBranch === '2' ? 'selected' : ''}>Branch 2</option>
+                  <option value="" ${curBranch === '' ? 'selected' : ''}>None / Head Office</option>
+                </select>
+              </div>
             </div>
           </div>
           <div class="modal-footer" style="padding:12px 20px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px;">

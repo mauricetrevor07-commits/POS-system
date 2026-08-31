@@ -1,6 +1,5 @@
 const Customers = {
   allCustomers: [],
-  revealedPins: {},
 
   async render() {
     const container = document.getElementById('page-content');
@@ -40,79 +39,6 @@ const Customers = {
     }
   },
 
-  // Show PIN verification dialog before revealing sensitive data
-  showPinVerifyDialog(id) {
-    const customer = this.allCustomers.find(c => c.id === id);
-    if (!customer) return;
-
-    // If already revealed, just hide immediately
-    if (this.revealedPins[id]) {
-      this.revealedPins[id] = false;
-      this.filter();
-      return;
-    }
-
-    // If customer has no security PIN set, reveal directly
-    if (!customer.security_pin) {
-      this.revealedPins[id] = true;
-      this.filter();
-      return;
-    }
-
-    const content = `
-      <div style="padding:10px 0;">
-        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
-          <span style="width:44px;height:44px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-            <i class="bi bi-shield-lock" style="font-size:1.3rem;color:#d97706;"></i>
-          </span>
-          <div>
-            <div style="font-weight:700;font-size:0.95rem;color:#1e293b;">${Utils.escapeHtml(customer.name)}</div>
-            <div style="font-size:0.8rem;color:#64748b;">Enter the customer's Security PIN to view their sensitive data (KRA PIN).</div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label style="font-weight:600;display:block;margin-bottom:6px;">Customer Security PIN</label>
-          <input id="pinVerifyInput" type="password" class="form-control" placeholder="Enter Security PIN" autocomplete="off"
-            style="font-size:1.3rem;letter-spacing:4px;text-align:center;"
-            oninput="document.getElementById('pinVerifyError').textContent=''"
-          />
-          <p id="pinVerifyError" style="color:#ef4444;font-size:0.82rem;margin-top:6px;min-height:18px;"></p>
-        </div>
-      </div>
-    `;
-
-    const { close } = Utils.showModal({
-      title: '<i class="bi bi-shield-lock"></i> PIN Verification Required',
-      content,
-      footer: `
-        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
-        <button class="btn btn-primary" id="pinVerifySubmit"><i class="bi bi-unlock"></i> Verify & Reveal</button>
-      `
-    });
-
-    // Focus the PIN field
-    setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 100);
-
-    const verify = () => {
-      const entered = document.getElementById('pinVerifyInput')?.value || '';
-      if (entered === customer.security_pin) {
-        this.revealedPins[id] = true;
-        close();
-        this.filter();
-        Utils.showToast('Sensitive data revealed. Remember to lock when done.', 'warning');
-      } else {
-        document.getElementById('pinVerifyError').textContent = 'Incorrect PIN. Please try again.';
-        document.getElementById('pinVerifyInput').value = '';
-        document.getElementById('pinVerifyInput').focus();
-      }
-    };
-
-    document.getElementById('pinVerifySubmit')?.addEventListener('click', verify);
-    document.getElementById('pinVerifyInput')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') verify();
-    });
-  },
-
   filter() {
     const query = (document.getElementById('customerSearch')?.value || '').toLowerCase();
     const filtered = this.allCustomers.filter(c => {
@@ -132,12 +58,8 @@ const Customers = {
     if (!list) return;
 
     const html = filtered.map(c => {
-      const isRevealed = !!this.revealedPins[c.id];
       const kraDisplay = c.kra_pin
-        ? (isRevealed ? `<code>${Utils.escapeHtml(c.kra_pin)}</code>` : `<span style="letter-spacing:2px; font-weight:700;">••••••••</span>`)
-        : '<span style="color:#94a3b8;">None</span>';
-      const pinDisplay = c.security_pin
-        ? (isRevealed ? `<code>${Utils.escapeHtml(c.security_pin)}</code>` : `<span style="letter-spacing:2px; font-weight:700;">••••</span>`)
+        ? `<code style="font-size:0.9rem; font-weight:600; color:#0f172a;">${Utils.escapeHtml(c.kra_pin)}</code>`
         : '<span style="color:#94a3b8;">None</span>';
 
       const cType = (c.customer_type || 'retailer').toLowerCase();
@@ -159,20 +81,7 @@ const Customers = {
           <td>${typeBadge}</td>
           <td>${Utils.escapeHtml(c.contact_person || '-')}</td>
           <td>${Utils.escapeHtml(c.phone || '-')}</td>
-          <td>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span>${kraDisplay}</span>
-              ${(c.kra_pin || c.security_pin) ? `
-                <button class="btn btn-xs ${isRevealed ? 'btn-warning' : 'btn-outline'}" 
-                  onclick="Customers.showPinVerifyDialog('${c.id}')" 
-                  title="${isRevealed ? 'Click to lock sensitive data' : 'Enter PIN to reveal sensitive data'}">
-                  <i class="bi bi-${isRevealed ? 'lock-fill' : 'eye'}"></i>
-                  ${isRevealed ? 'Lock' : 'Reveal'}
-                </button>
-              ` : ''}
-            </div>
-          </td>
-          <td>${pinDisplay}</td>
+          <td>${kraDisplay}</td>
           <td class="text-right">
             <button class="btn btn-sm btn-outline" onclick="Customers.editForm('${c.id}')"><i class="bi bi-pencil"></i> Edit</button>
             <button class="btn btn-sm btn-outline" onclick="Customers.managePrices('${c.id}')"><i class="bi bi-tag"></i> Prices</button>
@@ -195,12 +104,11 @@ const Customers = {
             <th>Contact Person</th>
             <th>Phone</th>
             <th>KRA Tax PIN</th>
-            <th>Security PIN</th>
             <th class="text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${html || '<tr><td colspan="7" class="text-center" style="padding:24px; color:#64748b;">No customers found.</td></tr>'}
+          ${html || '<tr><td colspan="6" class="text-center" style="padding:24px; color:#64748b;">No customers found.</td></tr>'}
         </tbody>
       </table>
     `;
@@ -246,22 +154,12 @@ const Customers = {
           </div>
         </div>
 
-        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-top:8px;">
-          <h5 style="font-size:0.85rem; font-weight:700; color:#334155; margin-bottom:8px; text-transform:uppercase;">
-            <i class="bi bi-shield-lock"></i> Sensitive Customer Identifiers (Protected)
-          </h5>
-          <div style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">KRA PIN (Tax Identification)</label>
-              <input id="custKraPin" class="form-control" value="${Utils.escapeHtml(customer?.kra_pin || '')}" placeholder="e.g. P051234567Z" />
-              <small style="color:#64748b; font-size:0.75rem;">Appears on Tax Invoices for ETIMS</small>
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Customer Security PIN</label>
-              <input id="custSecurityPin" type="password" class="form-control" value="${Utils.escapeHtml(customer?.security_pin || '')}" placeholder="Secret PIN / Code" />
-              <small style="color:#64748b; font-size:0.75rem;">Used to protect & verify customer sensitive data</small>
-            </div>
-          </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label style="font-size:0.85rem; font-weight:600; color:#334155; display:block; margin-bottom:4px;">
+            <i class="bi bi-file-earmark-text"></i> KRA Tax PIN (Tax Identification)
+          </label>
+          <input id="custKraPin" class="form-control" value="${Utils.escapeHtml(customer?.kra_pin || '')}" placeholder="e.g. P051234567Z" />
+          <small style="color:#64748b; font-size:0.75rem;">Printed directly on Tax Invoices and Delivery Notes for ETIMS compliance</small>
         </div>
       </div>
     `;
@@ -283,8 +181,7 @@ const Customers = {
         phone: document.getElementById('custPhone')?.value.trim(),
         email: document.getElementById('custEmail')?.value.trim(),
         address: document.getElementById('custAddress')?.value.trim(),
-        kra_pin: document.getElementById('custKraPin')?.value.trim(),
-        security_pin: document.getElementById('custSecurityPin')?.value.trim()
+        kra_pin: document.getElementById('custKraPin')?.value.trim()
       };
 
       if (!data.name) return Utils.toast('Customer Name is required', 'error');
@@ -295,7 +192,7 @@ const Customers = {
         } else {
           await DB._fetch('/api/customers', { method: 'POST', body: JSON.stringify(data) });
         }
-        Utils.toast('Customer profile saved', 'success');
+        Utils.toast('Customer profile saved successfully', 'success');
         close();
         this.loadList();
       } catch (e) {

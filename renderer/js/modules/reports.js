@@ -18,11 +18,19 @@ const Reports = {
       <div class="card no-print" style="margin-bottom:20px;">
         <div class="card-body" style="padding:16px 20px;">
           <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
-            <div style="flex:1; min-width:150px;">
+            <div style="flex:1; min-width:140px;">
+              <label style="font-weight:600; font-size:0.85rem; color:#475569; display:block; margin-bottom:4px;">Branch</label>
+              <select id="reportBranchSelect" class="form-control">
+                <option value="">All Branches Combined</option>
+                <option value="1">Branch 1 (Nairobi - KPCU)</option>
+                <option value="2">Branch 2</option>
+              </select>
+            </div>
+            <div style="flex:1; min-width:140px;">
               <label style="font-weight:600; font-size:0.85rem; color:#475569; display:block; margin-bottom:4px;">From Date</label>
               <input type="date" id="reportFrom" class="form-control" value="${startOfMonth}" />
             </div>
-            <div style="flex:1; min-width:150px;">
+            <div style="flex:1; min-width:140px;">
               <label style="font-weight:600; font-size:0.85rem; color:#475569; display:block; margin-bottom:4px;">To Date</label>
               <input type="date" id="reportTo" class="form-control" value="${today}" />
             </div>
@@ -76,9 +84,11 @@ const Reports = {
   async generate() {
     const from = document.getElementById('reportFrom')?.value || '';
     const to = document.getElementById('reportTo')?.value || '';
+    const branchId = document.getElementById('reportBranchSelect')?.value || '';
     const params = new URLSearchParams();
     if (from) params.append('from', from);
     if (to) params.append('to', to);
+    if (branchId) params.append('branch_id', branchId);
 
     const reportBox = document.getElementById('reportContainer');
     reportBox.innerHTML = '<div class="loading-spinner" style="margin:40px auto;"></div>';
@@ -153,7 +163,7 @@ const Reports = {
             <div>
               <h2 style="color:var(--primary); font-size:1.6rem; font-weight:700; margin-bottom:4px;">AUTOPAK INTERNATIONAL</h2>
               <p style="color:#64748b; font-size:0.85rem; margin-bottom:2px;">Manufacturers of Quality HDPE Pipes, Fittings & Heavy Duty Sacks</p>
-              <p style="color:#64748b; font-size:0.85rem;">Plot 123, Industrial Area, Nairobi | Tel: +254 700 000 000</p>
+              <p style="color:#64748b; font-size:0.85rem;">KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000</p>
             </div>
             <div style="text-align:right;">
               <h3 style="font-size:1.3rem; font-weight:700; color:#0f172a; text-transform:uppercase; margin-bottom:4px;">Sales & Inventory Report</h3>
