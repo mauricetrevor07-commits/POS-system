@@ -804,8 +804,8 @@ app.put('/api/payments/:saleId/approve', authMiddleware, adminOnly, async (req, 
     const items = await db.query('SELECT * FROM sale_items WHERE saleId = $1', [req.params.saleId]);
     for (const item of items.rows) {
       await db.query(
-        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, -$3)
-         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock - $3`,
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, -($3::numeric))
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock - $3::numeric`,
         [saleBranchId, item.productid, item.quantity]
       );
       await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [item.quantity, item.productid]);
@@ -960,6 +960,313 @@ app.get('/api/sales', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Reports ───────────────────────────
+app.get('/api/reports/sales-summary', authMiddleware, async (req, res) => {
+  try {
+    const { from, to, branch_id } = req.query;
+    const isStaff = req.user.role === 'staff';
+    const userBranch = req.user.branch_id || 1;
+
+    let salesSql = `
+      SELECT s.*
+      FROM sales s
+      WHERE s.payment_status = 'approved'
+    `;
+    const params = [];
+    let idx = 0;
+
+    if (from) {
+      idx++;
+      salesSql += ` AND s.timestamp >= $${idx}::timestamptz`;
+      params.push(from);
+    }
+    if (to) {
+      idx++;
+      salesSql += ` AND s.timestamp <= ($${idx}::date + interval '1 day - 1 millisecond')`;
+      params.push(to);
+    }
+
+    if (isStaff) {
+      idx++;
+      salesSql += ` AND s.branch_id = $${idx}`;
+      params.push(userBranch);
+    } else if (branch_id) {
+      idx++;
+      salesSql += ` AND s.branch_id = $${idx}`;
+      params.push(parseInt(branch_id));
+    }
+
+    const salesRes = await db.query(salesSql, params);
+    const approvedSales = salesRes.rows;
+
+    let totalAmount = 0;
+    approvedSales.forEach(s => {
+      totalAmount += parseFloat(s.total || 0);
+    });
+
+    const saleIds = approvedSales.map(s => s.id);
+    let totalPipesSold = 0;
+    let totalSacksSold = 0;
+    const productStats = {};
+
+    if (saleIds.length) {
+      const placeholders = saleIds.map((_, i) => `$${i+1}`).join(',');
+      const itemsRes = await db.query(
+        `SELECT si.*, p.category, p.name AS prod_name
+         FROM sale_items si
+         LEFT JOIN products p ON si.productId = p.id
+         WHERE si.saleId IN (${placeholders})`,
+        saleIds
+      );
+
+      itemsRes.rows.forEach(item => {
+        const qty = parseFloat(item.quantity || 0);
+        const price = parseFloat(item.price || 0);
+        const name = item.productname || item.prod_name || 'Item';
+        const cat = item.category || 'General';
+        const sub = qty * price;
+
+        if (cat.toLowerCase().includes('pipe') || name.toLowerCase().includes('pipe') || cat.toLowerCase().includes('hdpe')) {
+          totalPipesSold += qty;
+        } else if (cat.toLowerCase().includes('sack') || name.toLowerCase().includes('sack')) {
+          totalSacksSold += qty;
+        }
+
+        if (!productStats[name]) {
+          productStats[name] = {
+            productname: name,
+            category: cat,
+            quantity_sold: 0,
+            total_revenue: 0
+          };
+        }
+        productStats[name].quantity_sold += qty;
+        productStats[name].total_revenue += sub;
+      });
+    }
+
+    const productsSold = Object.values(productStats).map(p => ({
+      ...p,
+      avg_price: p.quantity_sold > 0 ? (p.total_revenue / p.quantity_sold) : 0
+    })).sort((a, b) => b.total_revenue - a.total_revenue);
+
+    // Stock remaining
+    let stockSql = `
+      SELECT p.id, p.name, p.category, p.price,
+             COALESCE(SUM(bs.stock), p.stock, 0)::real AS stock
+      FROM products p
+      LEFT JOIN branch_stock bs ON p.id = bs.product_id
+    `;
+    const stockParams = [];
+    if (isStaff) {
+      stockSql = `
+        SELECT p.id, p.name, p.category, p.price,
+               COALESCE(bs.stock, 0)::real AS stock
+        FROM products p
+        LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+      `;
+      stockParams.push(userBranch);
+    } else if (branch_id) {
+      stockSql = `
+        SELECT p.id, p.name, p.category, p.price,
+               COALESCE(bs.stock, 0)::real AS stock
+        FROM products p
+        LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+      `;
+      stockParams.push(parseInt(branch_id));
+    } else {
+      stockSql += ` GROUP BY p.id, p.name, p.category, p.price, p.stock`;
+    }
+    stockSql += ` ORDER BY p.name ASC`;
+
+    const stockRes = await db.query(stockSql, stockParams);
+
+    res.json({
+      total_sales: approvedSales.length,
+      total_amount: Math.round(totalAmount * 100) / 100,
+      total_pipes_sold: totalPipesSold,
+      total_sacks_sold: totalSacksSold,
+      products_sold_count: productsSold.length,
+      stock_remaining_count: stockRes.rows.length,
+      products_sold: productsSold,
+      stock_remaining: stockRes.rows
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Stock Transfers ───────────────────
+app.get('/api/transfers', authMiddleware, async (req, res) => {
+  try {
+    const isStaff = req.user.role === 'staff';
+    const userBranch = req.user.branch_id || 1;
+
+    let sql = `
+      SELECT t.*,
+             b1.name AS from_branch_name,
+             b2.name AS to_branch_name
+      FROM transfers t
+      LEFT JOIN branches b1 ON t.from_branch_id = b1.id
+      LEFT JOIN branches b2 ON t.to_branch_id = b2.id
+    `;
+    const params = [];
+    if (isStaff) {
+      sql += ` WHERE t.from_branch_id = $1 OR t.to_branch_id = $1`;
+      params.push(userBranch);
+    }
+    sql += ` ORDER BY t.created_at DESC`;
+
+    const transfersRes = await db.query(sql, params);
+    const transfers = transfersRes.rows;
+
+    const transferIds = transfers.map(t => t.id);
+    if (transferIds.length) {
+      const placeholders = transferIds.map((_, i) => `$${i+1}`).join(',');
+      const itemsRes = await db.query(
+        `SELECT ti.*, p.name AS product_name, p.category, p.barcode
+         FROM transfer_items ti
+         JOIN products p ON ti.product_id = p.id
+         WHERE ti.transfer_id IN (${placeholders})`,
+        transferIds
+      );
+      const itemsMap = {};
+      itemsRes.rows.forEach(it => {
+        if (!itemsMap[it.transfer_id]) itemsMap[it.transfer_id] = [];
+        itemsMap[it.transfer_id].push(it);
+      });
+      transfers.forEach(t => {
+        t.items = itemsMap[t.id] || [];
+      });
+    } else {
+      transfers.forEach(t => t.items = []);
+    }
+
+    res.json(transfers);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/transfers', authMiddleware, async (req, res) => {
+  try {
+    const { from_branch_id, to_branch_id, notes, items } = req.body;
+    if (!items || !items.length) return res.status(400).json({ error: 'Transfer must contain at least one item' });
+    if (!from_branch_id || !to_branch_id) return res.status(400).json({ error: 'Source and destination branches required' });
+    if (parseInt(from_branch_id) === parseInt(to_branch_id)) {
+      return res.status(400).json({ error: 'Source and destination branches cannot be the same' });
+    }
+
+    const fromBranch = parseInt(from_branch_id);
+    const toBranch = parseInt(to_branch_id);
+
+    // Validate origin branch stock
+    for (const it of items) {
+      const stockRes = await db.query(
+        `SELECT COALESCE(bs.stock, 0)::real AS stock, p.name
+         FROM products p
+         LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+         WHERE p.id = $2`,
+        [fromBranch, it.product_id]
+      );
+      if (!stockRes.rows.length) return res.status(404).json({ error: `Product ${it.product_id} not found` });
+      const currentStock = stockRes.rows[0].stock;
+      if (currentStock < it.quantity) {
+        return res.status(400).json({
+          error: `Insufficient stock for ${stockRes.rows[0].name} at Branch ${fromBranch} (Available: ${currentStock}, Requested: ${it.quantity})`
+        });
+      }
+    }
+
+    const transferId = randomUUID();
+    await db.query(
+      `INSERT INTO transfers (id, from_branch_id, to_branch_id, status, notes, created_by, created_at)
+       VALUES ($1, $2, $3, 'pending', $4, $5, NOW())`,
+      [transferId, fromBranch, toBranch, notes || null, req.user.username]
+    );
+
+    // Deduct stock from origin branch
+    for (const it of items) {
+      await db.query(
+        `INSERT INTO transfer_items (transfer_id, product_id, quantity)
+         VALUES ($1, $2, $3)`,
+        [transferId, it.product_id, it.quantity]
+      );
+      await db.query(
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, -($3::numeric))
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock - $3::numeric`,
+        [fromBranch, it.product_id, it.quantity]
+      );
+      if (fromBranch === 1) {
+        await db.query('UPDATE products SET stock = stock - $1 WHERE id = $2', [it.quantity, it.product_id]);
+      }
+    }
+
+    res.status(201).json({ id: transferId, status: 'pending', message: 'Stock transfer dispatched in transit' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/transfers/:id/receive', authMiddleware, async (req, res) => {
+  try {
+    const transferRes = await db.query('SELECT * FROM transfers WHERE id = $1', [req.params.id]);
+    if (!transferRes.rows.length) return res.status(404).json({ error: 'Transfer not found' });
+    const transfer = transferRes.rows[0];
+
+    if (transfer.status !== 'pending') {
+      return res.status(400).json({ error: `Cannot receive transfer with status '${transfer.status}'` });
+    }
+
+    const toBranch = transfer.to_branch_id;
+    const itemsRes = await db.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [transfer.id]);
+
+    for (const it of itemsRes.rows) {
+      await db.query(
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock + $3`,
+        [toBranch, it.product_id, it.quantity]
+      );
+      if (toBranch === 1) {
+        await db.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [it.quantity, it.product_id]);
+      }
+    }
+
+    await db.query(
+      `UPDATE transfers
+       SET status = 'received', received_by = $1, received_at = NOW()
+       WHERE id = $2`,
+      [req.user.username, transfer.id]
+    );
+
+    res.json({ success: true, message: 'Stock received and added to branch inventory' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/transfers/:id/cancel', authMiddleware, async (req, res) => {
+  try {
+    const transferRes = await db.query('SELECT * FROM transfers WHERE id = $1', [req.params.id]);
+    if (!transferRes.rows.length) return res.status(404).json({ error: 'Transfer not found' });
+    const transfer = transferRes.rows[0];
+
+    if (transfer.status !== 'pending') {
+      return res.status(400).json({ error: `Cannot cancel transfer with status '${transfer.status}'` });
+    }
+
+    const fromBranch = transfer.from_branch_id;
+    const itemsRes = await db.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [transfer.id]);
+
+    // Restore stock to origin
+    for (const it of itemsRes.rows) {
+      await db.query(
+        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock + $3`,
+        [fromBranch, it.product_id, it.quantity]
+      );
+      if (fromBranch === 1) {
+        await db.query('UPDATE products SET stock = stock + $1 WHERE id = $2', [it.quantity, it.product_id]);
+      }
+    }
+
+    await db.query(`UPDATE transfers SET status = 'cancelled' WHERE id = $1`, [transfer.id]);
+    res.json({ success: true, message: 'Transfer cancelled and stock restored to origin branch' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Sync helpers (dummy) ───────────────
 app.get('/api/sync/pending-sales', authMiddleware, (req, res) => res.json([]));
 app.get('/api/sync/pending-products', authMiddleware, (req, res) => res.json([]));
@@ -973,6 +1280,11 @@ app.get('/api/sync/status', authMiddleware, async (req, res) => {
   res.json(row.rows[0]);
 });
 app.post('/api/sync/update-pull-timestamp', authMiddleware, (req, res) => res.json({ success: true }));
+
+// ─── API JSON 404 Fallback (Prevents HTML response on API calls) ──
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found` });
+});
 
 // ─── Serve Frontend ────────────────────
 app.get('*', (req, res) => {

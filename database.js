@@ -2,13 +2,13 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
 
-// Create a connection pool from the Neon DATABASE_URL
+// Create a high-performance connection pool from the Neon DATABASE_URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },   // required for Neon
-  max: 20,
+  max: 50,                              // enhanced connection ceiling for stress testing
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
+  connectionTimeoutMillis: 15000
 });
 
 // Prevent unhandled errors on idle clients from crashing the Node.js server
@@ -357,22 +357,17 @@ async function init() {
     )
   `);
 
-  // Initialize branch stock for all existing products if empty
-  const prodRows = await query("SELECT id, stock FROM products");
-  for (const p of prodRows.rows) {
-    // Branch 1 (Nairobi) gets current product stock
-    await query(
-      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES (1, $1, $2)
-       ON CONFLICT (branch_id, product_id) DO NOTHING`,
-      [p.id, p.stock || 0]
-    );
-    // Branch 2 gets 0 stock initially if not present
-    await query(
-      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES (2, $1, 0)
-       ON CONFLICT (branch_id, product_id) DO NOTHING`,
-      [p.id]
-    );
-  }
+  // Initialize branch stock for all existing products if empty in 2 fast set queries
+  await query(`
+    INSERT INTO branch_stock (branch_id, product_id, stock)
+    SELECT 1, id, COALESCE(stock, 0) FROM products
+    ON CONFLICT (branch_id, product_id) DO NOTHING
+  `);
+  await query(`
+    INSERT INTO branch_stock (branch_id, product_id, stock)
+    SELECT 2, id, 0 FROM products
+    ON CONFLICT (branch_id, product_id) DO NOTHING
+  `);
 
   await query(`
     CREATE TABLE IF NOT EXISTS pricing_tiers (
@@ -383,7 +378,26 @@ async function init() {
     )
   `);
 
-  console.log('Database tables created / verified.');
+  // ── Database Performance & Stress-Testing Indexes ──
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON sales(timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_sales_branch_id ON sales(branch_id)",
+    "CREATE INDEX IF NOT EXISTS idx_sales_payment_status ON sales(payment_status)",
+    "CREATE INDEX IF NOT EXISTS idx_sales_customer_id ON sales(customer_id)",
+    "CREATE INDEX IF NOT EXISTS idx_sale_items_saleid ON sale_items(saleId)",
+    "CREATE INDEX IF NOT EXISTS idx_sale_items_productid ON sale_items(productId)",
+    "CREATE INDEX IF NOT EXISTS idx_products_category ON products(category)",
+    "CREATE INDEX IF NOT EXISTS idx_transfers_from_branch ON transfers(from_branch_id)",
+    "CREATE INDEX IF NOT EXISTS idx_transfers_to_branch ON transfers(to_branch_id)",
+    "CREATE INDEX IF NOT EXISTS idx_transfers_status ON transfers(status)",
+    "CREATE INDEX IF NOT EXISTS idx_transfer_items_transfer_id ON transfer_items(transfer_id)",
+    "CREATE INDEX IF NOT EXISTS idx_branch_stock_lookup ON branch_stock(branch_id, product_id)"
+  ];
+  for (const idx of indexes) {
+    try { await query(idx); } catch (_) {}
+  }
+
+  console.log('Database tables & performance indexes verified.');
 }
 
 // Graceful pool shutdown on termination

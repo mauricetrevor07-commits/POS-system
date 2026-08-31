@@ -9,11 +9,22 @@ const DB = {
         ...options.headers
       }
     });
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || res.statusText);
+    
+    const text = await res.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch (_) {
+      if (!res.ok) {
+        throw new Error(`Server Error (${res.status}): ${res.statusText}`);
+      }
+      throw new Error('Unexpected server response format');
     }
-    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || data.message || `Request failed with status ${res.status}`);
+    }
+
     return data;
   }
 };
