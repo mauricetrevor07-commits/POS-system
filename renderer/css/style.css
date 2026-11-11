@@ -1,637 +1,83 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+/* =========================================
+   1. DESIGN TOKENS (Variables)
+   ========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary: #4f46e5;
-  --primary-hover: #4338ca;
-  --success: #059669;
-  --success-hover: #047857;
-  --danger: #dc2626;
-  --danger-hover: #b91c1c;
-  --bg-color: #f8fafc;
-  --surface: #ffffff;
-  --text-main: #0f172a;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
-  --radius: 12px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
-  --shadow-md: 0 4px 15px rgba(0,0,0,0.05);
-  --shadow-lg: 0 10px 25px rgba(0,0,0,0.08);
+  /* 
+    COLORS: 
+    We are moving away from default AI colors (like Tailwind's Indigo). 
+    For a POS, a deep Teal (Primary) conveys trust and money, 
+    while warm Stone/Greys reduce eye strain during long shifts.
+  */
+  --primary: #0f766e; 
+  --primary-hover: #115e59;
+  --accent: #d97706; /* Amber for warnings/checkouts */
+  --success: #15803d;
+  --danger: #b91c1c;
+  
+  /* Backgrounds & Surfaces */
+  --bg-body: #f5f5f4; /* Warm off-white, not harsh pure white */
+  --bg-surface: #ffffff; /* Cards and modals sit on top */
+  
+  /* Typography Colors */
+  --text-main: #1c1917; /* Stone-900, softer than pure black */
+  --text-muted: #78716c; /* Stone-500 for secondary text */
+  --border: #e7e5e4; /* Stone-200 for subtle separators */
+  
+  /* 
+    SPACING & RADIUS:
+    POS systems shouldn't be overly bubbly. 6px-10px feels professional.
+  */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  
+  /* 
+    SHADOWS:
+    Layered, soft shadows instead of harsh black lines.
+  */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  
+  /* Layout */
   --sidebar-width: 260px;
 }
 
-* {
+/* =========================================
+   2. RESETS
+   ========================================= */
+*, *::before, *::after {
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
 }
 
+/* =========================================
+   3. BASE TYPOGRAPHY & BODY
+   ========================================= */
 body {
-  font-family: 'Outfit', sans-serif;
-  background: var(--bg-color);
+  /* Inter is a highly legible, standard SaaS font */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-body);
   color: var(--text-main);
   min-height: 100vh;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Hamburger button (mobile only) ───── */
-.hamburger {
-  display: none;
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  z-index: 1100;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 1.5rem;
-  color: var(--text-main);
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.app-container {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* ── Sidebar ──────────────────────────── */
-.sidebar {
-  width: var(--sidebar-width);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-sm);
-  z-index: 1000;
-  height: 100vh;
-  position: fixed;
-  left: 0;
-  top: 0;
-  overflow-y: auto;
-  transition: transform 0.3s ease;
-}
-
-.sidebar-header {
-  padding: 24px 20px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.sidebar-header h2 {
-  font-weight: 700;
-  font-size: 1.5rem;
-  color: var(--primary);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sidebar-header span {
-  background: var(--bg-color);
-  color: var(--text-muted);
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  border: 1px solid var(--border);
-}
-
-.nav {
-  list-style: none;
-  padding: 20px 12px;
-  flex: 1;
-}
-
-.nav-item {
-  margin-bottom: 6px;
-}
-
-.nav-item a {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  color: var(--text-muted);
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.95rem;
-  border-radius: 10px;
-  transition: all 0.25s ease;
-}
-
-.nav-item a i {
-  font-size: 1.2rem;
-}
-
-.nav-item a:hover {
-  background: var(--bg-color);
-  color: var(--primary);
-}
-
-.nav-item a.active {
-  background: var(--primary);
-  color: white;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-}
-
-/* ── Main Content ──────────────────────── */
-.main-content {
-  margin-left: var(--sidebar-width);
-  padding: 24px;
-  min-height: 100vh;
-  transition: margin-left 0.3s ease;
-  flex: 1;
-  overflow-y: auto;
-  background: var(--bg-color);
-}
-
-/* ── Toolbar ──────────────────────────── */
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.toolbar h2 {
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: var(--text-main);
-  letter-spacing: -0.5px;
-}
-
-/* ── Buttons ──────────────────────────── */
-.btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: none;
-  font-weight: 600;
-  font-size: 0.9rem;
-  font-family: 'Outfit', sans-serif;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-content: center;
-}
-
-.btn:active {
-  transform: scale(0.97);
-}
-
-.btn-primary {
-  background: var(--primary);
-  color: white;
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--primary-hover);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
-}
-
-.btn-success {
-  background: var(--success);
-  color: white;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-.btn-success:hover:not(:disabled) {
-  background: var(--success-hover);
-}
-
-.btn-danger {
-  background: var(--danger);
-  color: white;
-}
-.btn-danger:hover:not(:disabled) {
-  background: var(--danger-hover);
-}
-
-.btn-outline {
-  background: transparent;
-  border: 1.5px solid var(--border);
-  color: var(--text-main);
-}
-.btn-outline:hover:not(:disabled) {
-  background: var(--bg-color);
-  border-color: #cbd5e1;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 6px 14px;
-  font-size: 0.85rem;
-}
-
-.btn-block {
-  width: 100%;
-  margin-top: 8px;
-}
-
-/* ── Form Controls ────────────────────── */
-.form-control {
-  width: 100%;
-  padding: 12px 16px;
-  border: 1.5px solid var(--border);
-  border-radius: 8px;
-  font-family: 'Outfit', sans-serif;
-  font-size: 0.95rem;
-  color: var(--text-main);
-  background: var(--surface);
-  transition: all 0.2s;
-  outline: none;
-}
-
-.form-control:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-}
-
-/* ── Cards & Tables ───────────────────── */
-.card {
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  margin-bottom: 24px;
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  overflow: hidden;
-  transition: box-shadow 0.3s ease;
-}
-
-.card:hover {
-  box-shadow: var(--shadow-lg);
-}
-
-.card-header {
-  padding: 18px 24px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 600;
-  font-size: 1.05rem;
-  background: rgba(248, 250, 252, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.card-body {
-  padding: 24px;
-}
-
-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-}
-
-th {
-  background: var(--bg-color);
-  padding: 12px 16px;
-  text-align: left;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid var(--border);
-}
-
-td {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-  font-size: 0.95rem;
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-tr:hover td {
-  background: rgba(248, 250, 252, 0.8);
-}
-
-.badge {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-}
-
-.badge-primary { background: rgba(79, 70, 229, 0.1); color: var(--primary); }
-.badge-success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
-.badge-warning { background: rgba(245, 158, 11, 0.1); color: #d97706; }
-.badge-secondary { background: var(--bg-color); color: var(--text-muted); }
-
-/* ── POS Product Grid ─────────────────── */
-.product-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  padding: 8px;
-}
-
-.product-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
-  text-align: center;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.product-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--primary);
-  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.1);
-}
-
-.product-card h4 {
-  font-size: 1.05rem;
+h1, h2, h3, h4 {
   font-weight: 600;
   color: var(--text-main);
-  margin-bottom: 8px;
+  letter-spacing: -0.02em; /* Makes headings look premium */
 }
 
-.product-card .price {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--primary);
-  margin-bottom: 12px;
-}
-
-.product-card .stock {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-  background: var(--bg-color);
-  padding: 4px 8px;
-  border-radius: 6px;
-  display: inline-block;
-}
-
-/* ── Modals ───────────────────────────── */
-.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.3s;
-}
-
-.modal.show {
-  display: flex;
-  opacity: 1;
-}
-
-.modal-content {
-  background: var(--surface);
-  width: 90%;
-  max-width: 500px;
-  border-radius: 16px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-  transform: scale(0.95);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  overflow: hidden;
-}
-
-.modal.show .modal-content {
-  transform: scale(1);
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #f8fafc;
-}
-
-.modal-header h3 {
-  font-weight: 600;
-  font-size: 1.25rem;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: color 0.2s;
-}
-
-.close-btn:hover {
-  color: var(--danger);
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  background: #f8fafc;
-}
-
-/* ── Toast ────────────────────────────── */
-#toast-container {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  z-index: 9999;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.toast {
-  pointer-events: auto;
-  padding: 14px 20px;
-  border-radius: 12px;
-  font-weight: 500;
-  font-size: 0.95rem;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 260px;
-  max-width: 380px;
-  backdrop-filter: blur(6px);
-  background: rgba(30, 41, 59, 0.9);
-  transition: all 0.3s ease;
-  animation: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.toast i { font-size: 1.2rem; }
-
-.toast-success { background: #059669; }
-.toast-error   { background: #dc2626; }
-.toast-warning { background: #d97706; }
-.toast-info    { background: #4f46e5; }
-
-@keyframes slideInRight {
-  from { transform: translateX(120%); opacity: 0; }
-  to   { transform: translateX(0); opacity: 1; }
-}
-
-/* Utilities */
-.text-right { text-align: right; }
-.text-center { text-align: center; }
-.d-flex { display: flex; }
-.gap-2 { gap: 8px; }
-.gap-3 { gap: 16px; }
-
-/* ── Generic Modal Dialogs ────────────── */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1050;
-  padding: 16px;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.modal-dialog {
-  background: white;
-  border-radius: 14px;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.25);
-  max-height: 90vh;
-  overflow-y: auto;
-  width: 100%;
-  border: 1px solid var(--border);
-  animation: scaleUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.modal-md { max-width: 520px; }
-.modal-lg { max-width: 780px; }
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@keyframes scaleUp {
-  from { transform: scale(0.95); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
-}
-
-/* ── User & Product Modals ────────────── */
-.user-modal-overlay, .product-modal-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1050;
-  padding: 16px;
-}
-
-.user-modal-card, .product-modal-card {
-  background: white;
-  border-radius: 14px;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.25);
-  max-height: 90vh;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-}
-
-/* ── Print Styles ─────────────────────── */
-@media print {
-  .no-print { display: none !important; }
-  body { background: white; padding: 0; margin: 0; }
-  .main-content { padding: 0; }
-  .card { box-shadow: none; border: none; }
-}
-
-/* ── Mobile responsiveness ────────────── */
-@media (max-width: 768px) {
-  .hamburger {
-    display: block;
-  }
-
-  .sidebar {
-    transform: translateX(-100%);
-  }
-
-  .sidebar.open {
-    transform: translateX(0);
-  }
-
-  .main-content {
-    margin-left: 0;
-    padding: 16px;
-    padding-top: 56px;   /* space for the hamburger */
-  }
-
-  .toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  table {
-    font-size: 0.85rem;
-  }
-
-  th, td {
-    padding: 8px 10px;
-  }
-
-  .modal-content {
-    width: 95%;
-    margin: 10px;
-  }
-
-  .toast {
-    min-width: 200px;
-    max-width: 90vw;
-  }
-}
-.product-modal-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(2px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.product-modal-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-  max-height: 90vh;
-  overflow-y: auto;
+/* 
+  POS SPECIFIC: Tabular Numbers
+  This ensures that all numbers (prices, quantities) take up the exact same width.
+  So when you list items in a cart, the decimal points align perfectly. 
+*/
+.price, .cart-total, td, .badge {
+  font-variant-numeric: tabular-nums;
 }
