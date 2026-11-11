@@ -75,11 +75,21 @@ const Login = {
         const username = document.getElementById('loginUsername').value.trim();
         const password = document.getElementById('loginPassword').value;
         try {
-            const res = await fetch('/api/login', {
+           /* const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
-            });
+            });*/
+            // --- FAKE LOGIN BYPASS ---
+console.log("Login bypassed for UI testing.");
+localStorage.setItem('currentUser', JSON.stringify({ id: 1, role: 'admin', name: 'Dev' }));
+localStorage.setItem('token', 'fake-token');
+
+// Tell the app to show the dashboard
+document.getElementById('login-container').style.display = 'none';
+document.getElementById('app-container').classList.remove('hidden'); 
+// If your app relies on a specific function to load the dashboard, call it here:
+if (typeof loadDashboard === 'function') loadDashboard(); 
             if (!res.ok) throw new Error('Invalid credentials');
             const data = await res.json();
             localStorage.setItem('authToken', data.token);
