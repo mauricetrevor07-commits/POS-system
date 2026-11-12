@@ -10,15 +10,15 @@
     For a POS, a deep Teal (Primary) conveys trust and money, 
     while warm Stone/Greys reduce eye strain during long shifts.
   */
-  --primary: #0f766e; 
-  --primary-hover: #115e59;
-  --accent: #d97706; /* Amber for warnings/checkouts */
-  --success: #15803d;
+  --primary: #0e6f20; 
+  --primary-hover: #076433;
+  --accent: #c06804; /* Amber for warnings/checkouts */
+  --success: #26ac57;
   --danger: #b91c1c;
   
   /* Backgrounds & Surfaces */
   --bg-body: #f5f5f4; /* Warm off-white, not harsh pure white */
-  --bg-surface: #ccc5a680; /* Cards and modals sit on top */
+  --bg-surface: #2c7b2ccf; /* Cards and modals sit on top */
   
   /* Typography Colors */
   --text-main: #1c1917; /* Stone-900, softer than pure black */
@@ -145,7 +145,7 @@ h1, h2, h3, h4 {
 
 .nav-item a.active {
   background-color: var(--primary);
-  color:#115e59;
+  color:#315de2;
   box-shadow: 0 4px 12px rgb(9, 48, 15)
 }
 
