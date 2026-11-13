@@ -400,3 +400,23 @@ h1, h2, h3, h4 {
   font-weight: 700;
   color: var(--primary);
 }
+
+/*mobile adjustments for the POS split-view*/
+@media (max-width: 1024px) {
+  .pos-cart {
+    width: 320px;
+  }
+}
+
+@media (max-width: 768px) {
+  .pos-layout {
+    flex-direction: column;
+  }
+  .pos-cart {
+    width:100%;
+    height: 50vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.05);
+  }
+}
