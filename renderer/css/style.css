@@ -10,20 +10,20 @@
     For a POS, a deep Teal (Primary) conveys trust and money, 
     while warm Stone/Greys reduce eye strain during long shifts.
   */
-  --primary: #f7fbf8; 
-  --primary-hover: #076433;
-  --accent: #c06804; /* Amber for warnings/checkouts */
-  --success: #26ac57;
+  --primary: #0f766e; 
+  --primary-hover: #115e59;
+  --accent: #d97706; /* Amber for warnings/checkouts */
+  --success: #15803d;
   --danger: #b91c1c;
   
   /* Backgrounds & Surfaces */
-  --bg-body: #bdbdb8; /* Warm off-white, not harsh pure white */
-  --bg-surface: #f6f8f6eb; /* Cards and modals sit on top */
+  --bg-body: #f5f5f4; /* Warm off-white, not harsh pure white */
+  --bg-surface: #ffffff; /* Cards and modals sit on top */
   
   /* Typography Colors */
   --text-main: #1c1917; /* Stone-900, softer than pure black */
   --text-muted: #78716c; /* Stone-500 for secondary text */
-  --border: #7d7a78; /* Stone-200 for subtle separators */
+  --border: #e7e5e4; /* Stone-200 for subtle separators */
   
   /* 
     SPACING & RADIUS:
@@ -81,51 +81,60 @@ h1, h2, h3, h4 {
 .price, .cart-total, td, .badge {
   font-variant-numeric: tabular-nums;
 }
+/* =========================================
+   4. APP LAYOUT (Sidebar & Main Content)
+   ========================================= */
 
-/* 4. App layout */
+/* The main wrapper that holds everything */
 .app-container {
   display: flex;
-  height: 100vh;
-  overflow: hidden;
+  height: 100vh;       /* Takes up exactly the height of the screen */
+  overflow: hidden;    /* Prevents the whole page from scrolling */
 }
 
-/* sidebar */
+/* ── Sidebar ──────────────────────────── */
 .sidebar {
   width: var(--sidebar-width);
   background-color: var(--bg-surface);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   height: 100%;
-  z-index: 100;
-  transition: transform 0.3 cubic-beizer(0.4, 0, 0.2, 1);
+  z-index: 100; /* Ensures it stays above the content on mobile */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-header {
   padding: 24px;
-  border-bottom: 1ps solid var(--border);
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
 }
 
 .sidebar-header h2 {
-  font-size: 1.24rem;
-  color: var(--primary);
+  font-size: 1.25rem;
+  color: var(--primary); /* Brand color */
   display: flex;
   align-items: center;
-  gap: 12px
+  gap: 12px;
 }
 
-.sidebar-nav{
-  flex: 1;
-  overflow-y: auto;
+/* The navigation list */
+.sidebar-nav {
+  flex: 1;             /* Pushes the nav to fill available space */
+  overflow-y: auto;    /* Allows scrolling if there are many links */
   padding: 16px 12px;
 }
 
-.nav{
+.nav {
   list-style: none;
 }
 
 .nav-item {
+  margin-bottom: 4px;
+}
+
+.nav-item a {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -135,7 +144,7 @@ h1, h2, h3, h4 {
   font-weight: 500;
   font-size: 0.95rem;
   border-radius: var(--radius-md);
-  transition: all 0.2 ease;
+  transition: all 0.2s ease;
 }
 
 .nav-item a:hover {
@@ -143,17 +152,63 @@ h1, h2, h3, h4 {
   color: var(--text-main);
 }
 
+/* The active page link */
 .nav-item a.active {
   background-color: var(--primary);
-  color:#315de2;
-  box-shadow: 0 4px 12px rgb(9, 48, 15)
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.2); /* Soft brand shadow */
 }
 
+/* ── Main Content Area ────────────────── */
 .main-content {
-  flex: 1;
+  flex: 1;             /* Takes up the remaining width */
   background-color: var(--bg-body);
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: auto;    /* Only this area scrolls if content is long */
+}
+
+/* ── Mobile Hamburger Menu ────────────── */
+.hamburger {
+  display: none; /* Hidden on desktop */
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 1.25rem;
+  color: var(--text-main);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.2s;
+}
+
+.hamburger:hover {
+  background-color: var(--bg-body);
+}
+
+/* ── Mobile Responsiveness ────────────── */
+@media (max-width: 768px) {
+  .hamburger {
+    display: block; /* Show on mobile */
+  }
+
+  .sidebar {
+    position: fixed; /* Take it out of the document flow */
+    transform: translateX(-100%); /* Hide it off-screen to the left */
+  }
+
+  /* When JS adds the .open class, slide it in */
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Give the main content some top padding so the hamburger doesn't cover it */
+  .main-content {
+    padding-top: 64px; 
+  }
 }
