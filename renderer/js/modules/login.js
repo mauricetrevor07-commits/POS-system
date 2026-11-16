@@ -44,7 +44,7 @@ const Login = {
 
         // UI Loading State
         const originalBtnText = btn.innerHTML;
-        btn.innerHTML = '<span  class="spinner></span> Signing in...';
+        btn.innerHTML = '<span  class="spinner"></span> Signing in...';
         btn.disabled = true;
 
         try {
