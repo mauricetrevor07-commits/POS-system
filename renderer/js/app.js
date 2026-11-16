@@ -43,7 +43,7 @@ try{
   };
 
   document.getElementById('login-container').style.display = 'none';
-  const app = document.getElementById('app-container');
+  const appContainer = document.getElementById('app-container');
   appContainer.classList.remove('hidden');
   appContainer.style.display = 'flex';
 
