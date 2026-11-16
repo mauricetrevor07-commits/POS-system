@@ -1,37 +1,22 @@
 const Login = {
     render() {
         const container = document.getElementById('login-container');
-        if (!container) return; // Prevent crash if container is missing
+        const template = document.getElementById('login-template');
 
-        // Clean HTML structure using our Design System classes
-        container.innerHTML = `
-            <div class="login-wrapper">
-                <div class="login-card">
-                    <div class="login-header">
-                        <h2>Welcome Back</h2>
-                        <p>Point of Sale & Inventory Portal</p>
-                    </div>
-                    
-                    <form id="loginForm">
-                        <div class="form-group">
-                            <label class="form-label" for="loginUsername">Username</label>
-                            <input id="loginUsername" type="text" class="form-control" placeholder="Enter username" required autocomplete="username">
-                        </div>
-                        
-                        <div class="form-group">
-                            <label class="form-label" for="loginPassword">Password</label>
-                            <input id="loginPassword" type="password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
-                        </div>
-                        
-                        <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-block">
-                            Sign In
-                        </button>
-                        
-                        <p id="loginError" class="login-error"></p>
-                    </form>
-                </div>
-            </div>
-        `;
+        if (!container) {
+            console.error("Login Error: #login-container not found in html");
+         return; // Prevent crashing
+        }
+
+        if(!template) {
+            console.error("Login Error: #login-template not found in html");
+            return;
+        }
+
+        
+        container.innerHTML = '';
+        const clone = template.content.cloneNode(true);
+        container.appendChild(clone);
 
         // Attach event listener to the form (Handles both button click and Enter key)
         const form = document.getElementById('loginForm');
@@ -54,12 +39,12 @@ const Login = {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
 
-        // Reset error message
         errorMsg.textContent = '';
+        errorMsg.style.display = 'none';
 
         // UI Loading State
         const originalBtnText = btn.innerHTML;
-        btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Signing in...';
+        btn.innerHTML = '<span  class="spinner></span> Signing in...';
         btn.disabled = true;
 
         try {
@@ -86,6 +71,7 @@ const Login = {
 
         } catch (error) {
             errorMsg.textContent = error.message;
+            errorMsg.style.display = 'block';
             
             // Reset button state
             btn.innerHTML = originalBtnText;

@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AUTOPACK MANUFACTURERS</title>
+    <title>AUTOPAK MANUFACTURERS</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
     <link rel="manifest" href="manifest.json">
@@ -36,6 +36,53 @@
 
     
     <div id="modal-root"></div>
+
+    <template id="login-template">
+      <div class="login-split-layout">
+        <div class="login-brand-panel" style-="background-image: url('assets/login-bg.jpg');">
+          <div class="brand-overlay"></div>
+          <div class="brand-content">
+            <div class="brand-logo">
+              <img src="assets/logo.png" alt="AUTOPAK Int. logo" class="company-logo-img">
+            </div>
+            <h1>Point of Sale & Inventory Management.</h1>
+          </div>
+        </div>
+      </div>
+      <div class="login-form-panel">
+        <div class="login-form-container">
+
+          <div class="login-header">
+            <h2>Welcome back</h2>
+            <p>Enter your credentials to access your dashboard</p>
+          </div>
+
+          <form id="loginForm">
+            <div class="form-group">
+              <label class="form-label" for="loginUsername">Username</label>
+              <input id="loginUsername" type="text" class="form-control" placeholder="Username" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+              <div style="display:flex; justify-content: space-between;">
+                <label class="form-label" for="loginPassword">Password</label>
+                <a href="#" style="font-size: 0.85rem; color: var(--primary); text-decoration: none; font-weight: 500;">Forgot password?</a>
+              </div>
+              <input id="loginPassword" type="password" class="form-control" placeholder="********" required autocomplete="current-password">
+            </div>
+
+            <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-block" style="margin-top: 8px;">
+              Sign In
+            </button>
+            <p id="loginError" class="login-error"></p>
+          </form>
+
+          <div class="login-footer">
+            2026 Autopak Systems. All rights reserved.
+          </div>
+        </div>
+      </div>
+    </template>
 
     <script src="js/cache.js"></script>
     <script src="js/utils.js"></script>
