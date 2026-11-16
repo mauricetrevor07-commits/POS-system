@@ -26,57 +26,7 @@
         <!-- dynamically filled by app.js based on role -->
       </ul>
     </aside>
-    <main class="main-content" id="page-content"<!-- TEMP TEST BUTTONS -->
-<div style="padding: 24px;">
-  <button class="btn btn-primary" onclick="document.getElementById('testModal').classList.add('active')">Open Modal</button>
-  <button class="btn btn-success" onclick="showToast('Sale completed successfully!', 'success')">Trigger Success Toast</button>
-</div>
-
-<!-- TEMP MODAL HTML -->
-<div class="modal-overlay" id="testModal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3>Confirm Payment</h3>
-      <button class="close-btn" onclick="document.getElementById('testModal').classList.remove('active')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p>Are you sure you want to process this transaction for <strong>$12.50</strong>?</p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="document.getElementById('testModal').classList.remove('active')">Cancel</button>
-      <button class="btn btn-primary" onclick="document.getElementById('testModal').classList.remove('active'); showToast('Payment confirmed!', 'success');">Confirm</button>
-    </div>
-  </div>
-</div>
-
-<!-- TEMP TOAST CONTAINER -->
-<div class="toast-container" id="toastContainer"></div>
-
-<!-- TEMP JS TO TEST TOASTS -->
-<script>
-  function showToast(message, type = 'success') {
-    const container = document.getElementById('toastContainer');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    
-    let icon = 'bi-check-circle-fill';
-    if (type === 'error') icon = 'bi-x-circle-fill';
-    if (type === 'warning') icon = 'bi-exclamation-triangle-fill';
-
-    toast.innerHTML = `
-      <i class="bi ${icon} toast-icon"></i>
-      <span class="toast-message">${message}</span>
-    `;
-    
-    container.appendChild(toast);
-
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-      toast.classList.add('fade-out');
-      toast.addEventListener('animationend', () => toast.remove());
-    }, 3000);
-  }
-</script>></main>
+    <main class="main-content" id="page-content"></main>
   </div>
   <div id="modal-root"></div>
 
