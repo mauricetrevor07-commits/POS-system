@@ -45,6 +45,10 @@
 
 .nav {
   list-style: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding-bottom: 24px;
 }
 
 .nav-item {
