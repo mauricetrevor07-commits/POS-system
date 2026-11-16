@@ -7,7 +7,7 @@
 }
 
 .login-split-layout {
-    display: flex;
+    display: nonr;
     height: 100%;
     width: 100%;
 }
