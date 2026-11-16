@@ -17,7 +17,7 @@
     flex: none;
     position: relative;
     display: flex;
-    flex-direction: 0 0 45%;
+    flex-direction: 0 0 50%;
     justify-content: center;
     padding: 4rem;
     color: white;
@@ -52,8 +52,6 @@
     max-height: 80px;
     max-width: 220;
     object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     transform: scale(1.1);
 }
 
