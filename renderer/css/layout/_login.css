@@ -3,17 +3,18 @@
     inset: 0;
     z-index: 9999;
     background-color: var(--bg-surface);
+    overflow: hidden;
 }
 
 .login-split-layout {
     display: flex;
     height: 100%;
     width: 100%;
-    overflow: hidden;
 }
 
 .login-brand-panel {
-    flex: 1;
+    width:50%;
+    flex: none;
     position: relative;
     display: flex;
     flex-direction: column;
@@ -50,10 +51,11 @@
     height: 90px;
     width: auto;
     background-color: #ffffff;
-    padding: 12px 24px;
+    padding: 24px 48px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    object-fit: contain;
+    object-fit: cover;
+    transform: scale(2.2);
 }
 
 .brand-content h1 {
@@ -91,12 +93,14 @@
 }
 
 .login-form-panel {
-    flex: 1;
+    width: 50%;
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 2rem;
+    overflow-y: auto;
     background-color: var(--bg-surface);
-    padding: 4rem;
 }
 
 .login-form-container {
