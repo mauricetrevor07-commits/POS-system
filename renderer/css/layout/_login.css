@@ -48,10 +48,10 @@
 }
 
 .company-logo-img {
-    height: 90px;
+    height: 70px;
     width: auto;
     background-color: #ffffff;
-    padding: 24px 48px;
+    padding: 8px 16px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     object-fit: cover;
