@@ -1,6 +1,7 @@
 #login-container {
-    height: 100vh;
-    width: 100vw;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
     background-color: var(--bg-surface);
 }
 
@@ -8,6 +9,7 @@
     display: flex;
     height: 100%;
     width: 100%;
+    overflow: hidden;
 }
 
 .login-brand-panel {
@@ -45,10 +47,10 @@
 }
 
 .company-logo-img {
-    height: 60px;
+    height: 90px;
     width: auto;
     background-color: #ffffff;
-    padding: 10px 20px;
+    padding: 12px 24px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     object-fit: contain;
@@ -60,6 +62,7 @@
     line-height: 1.2;
     margin-bottom: 1.5rem;
     letter-spacing: -0.03rem;
+    color:#ffffff
 }
 
 .brand-content p {
@@ -93,7 +96,7 @@
     align-items: center;
     justify-content: center;
     background-color: var(--bg-surface);
-    padding: 2rem;
+    padding: 4rem;
 }
 
 .login-form-container {
