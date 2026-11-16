@@ -5,9 +5,10 @@
 /* 2.Layout */
 @import url('layout/_app-shell.css');
 @import url('layout/_pos-split.css');
+@import url('layout/_login.css');
 
 /* 3.components */
-@import url('components/_button.css');
+@import url('components/_buttons.css');
 @import url('components/_forms.css');
 @import url('components/_tables.css');
 @import url('components/_modals.css');
