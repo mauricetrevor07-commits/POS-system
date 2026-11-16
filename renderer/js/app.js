@@ -16,7 +16,18 @@ async function initApp() {
   const role = localStorage.getItem('userRole');
 
 if (!token || !role) {
-  showLogin();
+  const appContainer = document.getElementById('app-container');
+  const loginContainer = document.getElementById('login-container');
+
+  if (appContainer) appContainer.style.display = 'none';
+  if (loginContainer) loginContainer.style.display = 'flex';
+
+  if (typeof Login !== 'undefined') {
+    Login.render();
+  } else {
+    console.error("Module for login not loaded");
+    document.body.innerHTML =" login.js failed to load";
+  }
   return;
 }
 
