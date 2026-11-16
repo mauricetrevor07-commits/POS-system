@@ -7,9 +7,9 @@
 }
 
 .login-split-layout {
-    display: nonr;
-    height: 100%;
-    width: 100%;
+    display: none;
+    height: 50%;
+    width: 50%;
 }
 
 .login-brand-panel {
