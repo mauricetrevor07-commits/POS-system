@@ -11,14 +11,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   </head>
   <body>
-    <div id="login-container"></div>
+    <div id="login-container" style="display: none !important;"></div>
 
     <button class="hamburger no-print" onclick="toggleSidebar()">
       <i class="bi bi-list"></i>
     </button>
 
   
-    <div id="app-container" class="app-container hidden">
+    <div id="app-container" class="app-container" style="display: flex !important;">
       <aside class="sidebar no print">
         <div class="sidebar-header">
           <h2>Point of Sale Terminal <span id="branchBadge" class="badge badge-neutral"></span></h2>
