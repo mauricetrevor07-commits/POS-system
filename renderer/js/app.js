@@ -78,7 +78,7 @@ function showLogin() {
   document.getElementById('app-container').classList.add('hidden');
   document.getElementById('app-container').style.display = 'none';
   document.getElementById('login-container').style.display = 'flex';
-  if (window.Login) login.render();
+  if (window.Login) Login.render();
 }
 
 function buildSidebar() {
@@ -190,7 +190,8 @@ function handleNavClick(e) {
 
 async function loadPage(page) {
   const main = document.getElementById('page-content');
-  main.innerHTML = '<div class="loading-state">Loading...</div>'; // Prevent blank flashes
+  if (!main) return;
+    main.innerHTML = '<div class="loading-state">Loading...</div>'; // Prevent blank flashes
 
   // Security Check: Prevent staff from accessing admin pages via URL manipulation
   if (ADMIN_PAGES.includes(page) && currentUser.role !== 'admin') {
@@ -209,23 +210,31 @@ async function loadPage(page) {
 
   // Route to Module
   try {
-    switch(page) {
-      case 'pos': await POS.render(); break;
-      case 'pending-payments': await AdminPayments.render(); break;
-      case 'reports': await Reports.render(); break;
-      case 'transfers': await Transfers.render(); break;
-      case 'products': await Products.render(); break;
-      case 'customers': await Customers.render(); break;
-      case 'sales': await Sales.render(); break;
-      case 'users': 
-        if (window.Users) await Users.render(); 
-        else main.innerHTML = '<p>Users module not loaded.</p>';
-        break;
-      case 'settings':
-        if (window.Settings) await Settings.render();
-        else main.innerHTML = '<p>Settings module not loaded.</p>';
-        break;
-      default: await POS.render();
+    if (page === 'pos && window.pos') {
+      await POS.render();
+    }
+    else if (page === 'pending-payments' && window.AdminPayments) {
+      await AdminPayments.render();
+    }
+    else if (page === 'reports' && window.Reports) {
+      await Reports.render()
+    }
+    else if (page === 'products' && window.Customers) {
+      await Customers.render();
+    }
+    else if (page === 'users' && window.Users) {
+      await Users.render();
+    }
+    else if (page === 'settings'&& window.Settings) {
+      await Settings.render();
+    }
+    else {
+      const response = await fetch(`template/${page}.html`);
+      if (response.ok) {
+        main.innerHTML = await response.text();
+      } else {
+        main.innerHTML = `<div class="card" style="margin:20px;"><div class="card-body">Page"${page}" is under construction.</div></div>`;
+      }
     }
   } catch (error) {
     console.error(`Error loading page ${page}:`, error);

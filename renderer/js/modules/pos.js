@@ -11,20 +11,27 @@ const POS = {
 
   async render() {
     const container = document.getElementById('page-content');
-    const template = document.getElementById('pos-template');
+    if (!container) return;
+    container.innerHTML = '"text-align:center;">Loading Terminal...</div>';
 
-    if(!container || !template) return;
+    try {
+      const response = await fetch('templates/pos.html');
+      if (!response.ok) throw new Error('Template not found on server');
 
-    container.innerHTML = '';
-    container.appendChild(template.content.cloneNode(true));
+      const html = await response.text();
+      container.innerHTML =html;
 
-    this.attachEvents();
-
+      this.attachEvents();
+   
     await this.loadCategoryPricing();
     await this.loadProducts();
     await this.loadCustomers();
     this.updateCartDisplay();
-  },
+  } catch (error) {
+    console.error(error);
+    container.innerHTML = `<p style="color=red; padding:20px;">Error: ${error.message}</p>`;
+  }
+},
 
   attachEvents() {
     const catBar = document.getElementById('posCategoryBar');
