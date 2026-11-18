@@ -1,33 +1,29 @@
 const Login = {
-    render() {
+    async render() {
         const container = document.getElementById('login-container');
-        const template = document.getElementById('login-template');
+        if (!container) return;
 
-        if (!container) {
-            console.error("Login Error: #login-container not found in html");
-         return; // Prevent crashing
+        try {
+            const response = await fetch('templates/login.html');
+            if (!response.ok) throw new Error('Failed to load login template');
+
+            const html = await response.text();
+
+            container.innerHTML = html;
+            container.style.display = 'flex';
+
+            const form = document.getElementById('loginForm');
+            if (from) {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    Login.submit();
+                });
+            }
+        } catch (error) {
+            console.error(error);
+            container.innerHTML = '<p style="color: red;">Error login screen.</p>';
         }
-
-        if(!template) {
-            console.error("Login Error: #login-template not found in html");
-            return;
-        }
-
-        
-        container.innerHTML = '';
-        const clone = template.content.cloneNode(true);
-        container.appendChild(clone);
-
-        // Attach event listener to the form (Handles both button click and Enter key)
-        const form = document.getElementById('loginForm');
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault(); // Prevent page reload
-                Login.submit();
-            });
-        }
-    },
-
+        },
     async submit() {
         const usernameInput = document.getElementById('loginUsername');
         const passwordInput = document.getElementById('loginPassword');
