@@ -20,7 +20,7 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
 const apiLimiter = rateLimit({ windowsMs: 15 * 60 * 1000, max: 5000});
 app.use('/api/', apiLimiter);
-app.use(express.static(path.join(__dirname, 'renderer')));
+app.use(express.static(path.join(__dirname, '../renderer')));
 app.use('/templates', express.static(path.join(__dirname, 'renderer', 'templates')));
 app.use('/templates', express.static(path.join(__dirname, 'templates')));
 
