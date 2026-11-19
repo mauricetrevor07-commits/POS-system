@@ -11,7 +11,7 @@ const{ globalErrorHandler } = require('./middleware/errorHandler');
 const authRoutes = require('./middleware/errorHandler');
 const salesRoutes = require('./routes/salesRoutes');
 const productRoutes = require('./routes/productRoutes');
-// const userRoutes = require('./routes/userRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -27,7 +27,7 @@ app.use('/templates', express.static(path.join(__dirname, 'templates')));
 app.use('/api', authRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
-//app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 
 app.all('/api/*', (req, res) => {
   res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found`});
