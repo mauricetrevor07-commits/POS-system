@@ -8,7 +8,7 @@ const path = require('path');
 const db = require('./database.js');
 const{ globalErrorHandler } = require('./middleware/errorHandler');
 
-const authRoutes = require('./middleware/errorHandler');
+const authRoutes = require('./routes/authRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const productRoutes = require('./routes/productRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -24,10 +24,13 @@ app.use(express.static(path.join(__dirname, '../renderer')));
 app.use('/templates', express.static(path.join(__dirname, 'renderer', 'templates')));
 app.use('/templates', express.static(path.join(__dirname, 'templates')));
 
-//app.use('/api', authRoutes);
-//app.use('/api/sales', salesRoutes);
-//app.use('/api/products', productRoutes);
-//app.use('/api/users', userRoutes);
+console.log("Auth Routes:", typeof authRoutes, authRoutes);
+console.log("Sales Routes:", typeof salesRoutes, salesRoutes);
+console.log("products routes:", typeof productRoutes, productRoutes);
+app.use('/api', authRoutes);
+app.use('/api/sales', salesRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/users', userRoutes);
 
 app.all('/api/*', (req, res) => {
   res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found`});
