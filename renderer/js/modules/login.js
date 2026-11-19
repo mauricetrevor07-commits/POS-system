@@ -13,7 +13,7 @@ const Login = {
             container.style.display = 'flex';
 
             const form = document.getElementById('loginForm');
-            if (from) {
+            if (form) {
                 form.addEventListener('submit', (e) => {
                     e.preventDefault();
                     Login.submit();

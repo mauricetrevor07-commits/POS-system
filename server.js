@@ -630,27 +630,39 @@ app.post('/api/customer-prices', authMiddleware, async (req, res) => {
 // ─── Sales (pending payment) ────────────
 app.post('/api/sales', authMiddleware, async (req, res) => {
   try {
-    const { items, paymentMethod, customer_id, payment_reference: reqPayRef, vat_rate: reqVatRate, credit_terms, due_date, branch_id: reqBranchId } = req.body;
+    const { items, paymentMethod, customer_id, payment_reference: reqPayRef, vat_rate: reqVatRate, credit_terms, due_date, branch_id: reqBranchId, indempotency_key } = req.body;
     if (!items || !items.length) return res.status(400).json({ error: 'Cart empty' });
+    if (!idempotency_key) return res.status(400).json({ error: 'Idempotency key required for security' });
     const allowedMethods = ['mobile_money','bank_transfer','cheque','credit','cash'];
     if (!allowedMethods.includes(paymentMethod)) {
       return res.status(400).json({ error: 'Invalid payment method' });
     }
 
-    if (paymentMethod === 'credit' && !customer_id) {
-      return res.status(400).json({ error: 'A registered customer is required for credit sales' });
-    }
+    const client = await db.connect();
 
-    // Branch assignment: Staff is locked to their branch; Admin can specify branch
+    try {
+      await client.query('BEGIN');
+      const checkExisting = await client.query('SELECT id FROM sales WHERE idempotency_key = $1', [idempotency_key]);
+      if (checkExisting.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(200).json({ success: true, message: 'sale already processed', saleId: checkExisting.rows[0].id });
+      }
+
+      if (paymentMethod === 'credit' && !customer_id) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'A registered customer is required for credit sales'});
+      }
+    }
+       // Branch assignment: Staff is locked to their branch; Admin can specify branch
     const saleBranchId = req.user.role === 'staff'
       ? (req.user.branch_id || 1)
       : (parseInt(reqBranchId) || req.user.branch_id || BRANCH_ID);
 
     let payment_reference = reqPayRef?.trim();
-    if (!payment_reference) {
-      if (paymentMethod === 'credit') {
+    if (!payment_reference  && paymentMethod === 'credit') {
         payment_reference = `CREDIT-${(credit_terms || 'TERMS').toUpperCase().replace(/[^A-Z0-9]/g, '-')}`;
-      } else {
+      } else if (!payment_reference) {
+        await client.query('ROLLBACK');
         return res.status(400).json({ error: 'Payment reference required' });
       }
     }
@@ -658,14 +670,14 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     // Fetch customer details if provided
     let customerType = 'retailer';
     if (customer_id) {
-      const custRes = await db.query('SELECT customer_type FROM customers WHERE id=$1', [customer_id]);
+      const custRes = await client.query('SELECT customer_type FROM customers WHERE id=$1', [customer_id]);
       if (custRes.rows.length && custRes.rows[0].customer_type) {
         customerType = custRes.rows[0].customer_type.toLowerCase();
       }
     }
 
     // Fetch category pricing rules
-    const catPricingRes = await db.query('SELECT * FROM category_tier_pricing');
+    const catPricingRes = await client.query('SELECT * FROM category_tier_pricing');
     const catPricingMap = {};
     catPricingRes.rows.forEach(r => { catPricingMap[(r.category || '').toLowerCase()] = r; });
 
@@ -673,47 +685,23 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     const evaluatedItems = [];
 
     for (const item of items) {
-      const prod = await db.query(
-        `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock
-         FROM products p
-         LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
-         WHERE p.id = $2`,
-        [saleBranchId, item.productId]
+      const prod = await client.query(
+      `SELECT p.*, COALESCE(bs.stock, 0) ::real AS stock
+      FROM products p
+      LEFT JOIN branch_stock bd ON p.id = bs.product_id AND bs.branch_id = $1
+      WHERE p.id = $2 FOR UPDATE`,
+      [saleBranchId, item.productId]
       );
-      if (!prod.rows.length) return res.status(404).json({ error: `Product ${item.productId} not found` });
+
+      if (!prod.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({error: `product not found`});
+      }
+
       const product = prod.rows[0];
       if (product.stock < item.quantity) {
-        return res.status(400).json({ error: `Insufficient stock for ${product.name} at Branch ${saleBranchId} (Available: ${product.stock}, Requested: ${item.quantity})` });
-      }
-
-      // Priority 1: Product specific tier price
-      let price = product.price;
-      if (customerType === 'distributor') {
-        if (product.distributor_price !== null && product.distributor_price !== undefined) {
-          price = product.distributor_price;
-        } else {
-          // Priority 2: Category level tier discount
-          const catRule = catPricingMap[(product.category || '').toLowerCase()];
-          if (catRule && catRule.distributor_discount_pct) {
-            price = Math.round((product.price * (1 - catRule.distributor_discount_pct / 100)) * 100) / 100;
-          }
-        }
-      } else if (customerType === 'wholesaler') {
-        if (product.wholesale_price !== null && product.wholesale_price !== undefined) {
-          price = product.wholesale_price;
-        } else {
-          // Priority 2: Category level tier discount
-          const catRule = catPricingMap[(product.category || '').toLowerCase()];
-          if (catRule && catRule.wholesale_discount_pct) {
-            price = Math.round((product.price * (1 - catRule.wholesale_discount_pct / 100)) * 100) / 100;
-          }
-        }
-      }
-
-      // Priority 0 (Highest): Individual customer custom negotiated price
-      if (customer_id) {
-        const custPrice = await db.query('SELECT custom_price FROM customer_prices WHERE customer_id=$1 AND product_id=$2', [customer_id, item.productId]);
-        if (custPrice.rows.length) price = custPrice.rows[0].custom_price;
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error:`Insufficient stock for ${product.name}. Available: ${product.stock}`});
       }
 
       subtotal += price * item.quantity;
@@ -731,18 +719,20 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
     const total = Math.round((subtotal + vatAmount) * 100) / 100;
 
     const saleId = randomUUID();
-    await db.query(
-      `INSERT INTO sales (id, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, credit_terms, due_date, payment_status, status, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending_payment','completed',$12)`,
-      [saleId, saleBranchId, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, credit_terms || null, due_date || null, req.user.username]
+    await client.query(
+      `INSERT INTO sales (id, idempotency_key, branch_id, customer_id, subtotal, vat_rate, vat_amount, total, paymentMethod, payment_reference, credit_terms, due_date, payment_status, status, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending_payment','completed',$13)`,
+      [saleId, idempotency_key, saleBranchId, customer_id || null, subtotal, vatRate, vatAmount, total, paymentMethod, payment_reference, credit_terms || null, due_date || null, req.user.username]
     );
 
     for (const item of evaluatedItems) {
-      await db.query(
+      await client.query(
         `INSERT INTO sale_items (saleId, productId, productName, quantity, price) VALUES ($1,$2,$3,$4,$5)`,
         [saleId, item.productId, item.productName, item.quantity, item.price]
       );
     }
+
+    await client.query('COMMIT');
 
     res.status(201).json({
       id: saleId,
@@ -757,8 +747,15 @@ app.post('/api/sales', authMiddleware, async (req, res) => {
       payment_status: 'pending_payment',
       message: 'Payment pending admin approval'
     });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('SALE ERROR:', err);
+     res.status(500).json({ error: 'An error occurred processing the sale. Please try again.' });
+     } finally {
+      client.release();
+      }
+    });
 
 // ─── Pending Payments (admin only) ─────
 app.get('/api/pending-payments', authMiddleware, adminOnly, async (req, res) => {
