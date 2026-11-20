@@ -234,7 +234,7 @@ async function loadPage(page) {
       await Settings.render();
     }
     else {
-      const response = await fetch(`template/${page}.html`);
+      const response = await fetch(`templates/${page}.html`);
       if (response.ok) {
         main.innerHTML = await response.text();
       } else {
