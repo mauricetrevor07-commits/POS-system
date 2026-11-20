@@ -95,7 +95,7 @@ const POS = {
   },
 
   addToCart(productId) {
-    const product = this.products.find(p => p.id === productId);
+    const product = this.products.find(p => p.id == productId);
     if (!product) return;
 
     const existing = this.cart.find(item => item.productId === productId);
