@@ -215,7 +215,7 @@ async function loadPage(page) {
 
   // Route to Module
   try {
-    if (page === 'pos && window.pos') {
+    if (page === 'pos' && window.pos) {
       await POS.render();
     }
     else if (page === 'pending-payments' && window.AdminPayments) {
