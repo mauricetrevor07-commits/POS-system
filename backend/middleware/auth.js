@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
-const JWT_SECRET = process.env.JWT_SECRET || 'super-secret-key-change-in-production';
-
+const JWT_SECRET = 'autopak-super-secret-key-2026';
 function authMiddleware(req, res, next) {
     const token = req.headers['x-auth-token'] || req.headers['authorization']?.split('')[1];
     if (!token) return res.status(401).json({ error: 'Unauthorized. No token provided.'});

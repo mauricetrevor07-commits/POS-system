@@ -64,6 +64,7 @@ const Login = {
             
             // Reload to trigger app.js initApp()
             //location.reload(); 
+            console.log("LOGIN RESPONSE DATA:", data);
             alert("Login successful! Check Application tab now.");
 
         } catch (error) {
