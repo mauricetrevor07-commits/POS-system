@@ -62,11 +62,7 @@ const Login = {
             localStorage.setItem('userName', data.name || data.username);
             localStorage.setItem('userId', data.id || '');
             
-            // Reload to trigger app.js initApp()
-            //location.reload(); 
-            console.log("LOGIN RESPONSE DATA:", data);
-            alert("Login successful! Check Application tab now.");
-
+            window.location.href = '/?page=pos';
         } catch (error) {
             errorMsg.textContent = error.message;
             errorMsg.style.display = 'block';
