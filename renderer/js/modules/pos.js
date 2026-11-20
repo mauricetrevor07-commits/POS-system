@@ -144,6 +144,16 @@ const POS = {
     const vatRate = parseFloat(document.getElementById('vatSelect')?.value || 0.16);
     const total = subtotal + (subtotal * vatRate);
     totalEl.textContent = `KES ${Utils.formatCurrency(total)}`;
+    const mobileCount = document.getElementById('mobileCartCount');
+    const mobileTotal = document.getElementById('mobileCartTotal');
+    if (mobileCount && mobileTotal) {
+      const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+      mobileCount.textContent = totalItems;
+      mobileTotal.textContent = `KES ${Utils.formatCurrency(total)}`;
+      if (totalItems === 0) {
+        document.querySelector('.pos-cart')?.classList.remove('open');
+      }
+    }
   },
 
   removeFromCart(index) {
@@ -191,7 +201,14 @@ const POS = {
       btn.innerHTML = originalText;
       btn.disabled = false;
     }
-  }
+  },
+
+  toggleMobileCart() {
+    const cart = document.querySelector('.pos-cart');
+    if (cart) {
+      cart.classList.toggle('open');
+    }
+  },
 };
 
 // Ensure app.js can find it

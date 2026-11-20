@@ -269,7 +269,11 @@ function escapeHTML(str) {
 
 // Keep sidebar toggle global since HTML onclick uses it
 window.toggleSidebar = function() {
-  document.querySelector('.sidebar')?.classList.toggle('open');
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) {
+    sidebar.classList.toggle('open');
+    document.body.classList.toggle('sidebar-is-open');
+  }
 };
 
 
