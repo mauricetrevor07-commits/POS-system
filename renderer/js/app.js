@@ -25,17 +25,26 @@ if (!token || !role) {
   if (typeof Login !== 'undefined') {
     Login.render();
   } else {
-    console.error("Module for login not loaded");
-    document.body.innerHTML =" login.js failed to load";
+    console.error("Login module not loaded");
   }
   return;
 }
 
 try{
+  const response = await fetch('/api/branch', {
+    headers: { 'X-Auth-Token': token }
+  });
 
-  if (!res.ok) throw new Error('Invalid token');
+  if (response.status === 401) {
+    throw new Error('401');
+  }
 
-  currentBranch = await res.json();
+  if (!response.ok) {
+    throw new Error(response.status.toString());
+  }
+
+  const BranchData = await response.json();
+  currentBranch = branchData;
   window.currentBranch = currentBranch;
 
   const branchbadge = document.getElementById('branchBadge');
@@ -52,26 +61,27 @@ try{
 
   document.getElementById('login-container').style.display = 'none';
   const appContainer = document.getElementById('app-container');
+  if (appContainer) {
   appContainer.classList.remove('hidden');
   appContainer.style.display = 'flex';
-
+  }
   if (window.Sync) Sync.init(window.SYNC_SERVER_URL || '');
   buildSidebar();
 
   const hash = window.location.hash.replace('#', '').trim();
   const urlParams = new URLSearchParams(window.location.search);
   const targetPage = hash || urlParams.get('page') || 'pos';
-  const res = await fetch('/api/branch', {headers: { 'X-Auth-Token': token}});
-  if (!res.ok) throw new Error(res.status);
   loadPage(targetPage);
 
-  } catch (e) {
-  console.error("Auth failed:", e);
-  if (e.message === '401' || e.message.includes('Invalid token')){
+  } catch (error) {
+  console.error("Auth failed:", error);
+
+
+  if (error.message === '401') {
     localStorage.clear();
     location.reload();
   } else {
-    alert("Server error, but you are still logged in. Check console.");
+    alert(`Server error (${error.message}). Please check the console.`);
   }
 }
 

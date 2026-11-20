@@ -7,12 +7,11 @@ const morgan = require('morgan');
 const path = require('path');
 const db = require('./database.js');
 const{ globalErrorHandler } = require('./middleware/errorHandler');
-
 const authRoutes = require('./routes/authRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const productRoutes = require('./routes/productRoutes');
 const userRoutes = require('./routes/userRoutes');
-const branchRoutes= require('./routes/branchRoutes');
+const branchRoutes = require('./routes/branchRoutes');
 
 const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
