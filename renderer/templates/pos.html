@@ -1,0 +1,65 @@
+<div class="pos-layout no-print">
+    <section class="pos-products">
+        <div class="toolbar">
+            <h2>New Sale Terminal</h2>
+        </div>
+        <div class="pos-category-bar" id="posCategoryBar" style="display:flex; gap:8px; margin-bottom: 20px; overflow-x:auto;">
+            <button class="btn btn-sm btn-primary" data-category="all">All Products</button>
+            <button class="btn btn-sm btn-outline" data-category="pipe">Pipes</button>
+            <button class="btn btn-sm btn-outline" data-category="sack">Sacks</button>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 24px;">
+            <input type="text" id="searchProducts" class="form-control" placeholder="Search product br name..." />
+        </div>
+    
+        <div id="ProductGrid" style="flex: 1; overflow-y: auto;">
+            <p style="text-align: center; color: var(--text-muted);">Loading products...</p>
+        </div>
+    </section>
+
+    <aside class="pos-cart">
+        <div class="cart-header" style="display: flex; flex-direction: column; gap:8px;">
+            <label class="form-label" for="customerSelect">Select Customer</label>
+            <select id="customerSelect" class="form-control">
+                <option value="">Walk-in Customer [RETAIL]</option>
+            </select>
+        </div>
+
+        <div class="cart-items" id="cartItems">
+            <p style="text-align:center; color:var(--text-muted); margin-top: 20px;">Cart is empty.</p>
+        </div>
+
+        <div class="cart-footer">
+            <div class="form-group" style="margin-bottom: 16px;">
+                <select id="vatSelect" class="form-control">
+                    <option value="0.16">VAT Included (16%)</option>
+                    <option value="0">VAT Exempt (0%)</option>
+                </select>
+            </div>
+
+            <div class="cart-total" style="margin-bottom: 16px; padding-bottom: 16px; border-bottom:  1px solid var(--border);">
+                <span>Total</span>
+                <span class="price-large" id="cartTotal">KES 0.00</span>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 12px;">
+                <select id="paymentMethod" class="form-control">
+                    <option value="mobile_money">MPESA / Mobile</option>
+                    <option value="cash">Cash</option>
+                    <option value="credit">Credit (Pay on Account)</option>
+                </select>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 20px;">
+                <input type="text" id="paymentRef" class="form-control" placeholder="Transaction Ref #" />
+            </div>
+            <button id="btnCheckout" class="btn btn-primary btn-block" style="padding: 14px;">
+                <i class="bi bi-send-check"></i> Submit Sale
+            </button>
+            <button id="btnClearCart" class="btn btn-secondary btn-block" style="margin-top: 8px;">
+                <i class="bi bi-trash"></i> Clear Order
+            </button>
+        </div>
+    </aside>
+</div>

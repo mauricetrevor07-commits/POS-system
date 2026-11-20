@@ -3,245 +3,173 @@ const POS = {
   selectedCustomer: null,
   products: [],
   customers: [],
-  customerCustomPrices: {},
-  selectedCategory: 'all',
-  searchQuery: '',
   vatRate: 0.16,
-  categoryPricing: {},
 
   async render() {
     const container = document.getElementById('page-content');
-    if (!container) return;
-    container.innerHTML = '"text-align:center;">Loading Terminal...</div>';
+    container.innerHTML = '<div style="padding:40px; text-align:center;">Loading Terminal...</div>';
 
     try {
       const response = await fetch('templates/pos.html');
-      if (!response.ok) throw new Error('Template not found on server');
-
-      const html = await response.text();
-      container.innerHTML =html;
-
+      if (!response.ok) throw new Error('pos.html template not found');
+      
+      container.innerHTML = await response.text();
       this.attachEvents();
-   
-    await this.loadCategoryPricing();
-    await this.loadProducts();
-    await this.loadCustomers();
-    this.updateCartDisplay();
-  } catch (error) {
-    console.error(error);
-    container.innerHTML = `<p style="color=red; padding:20px;">Error: ${error.message}</p>`;
-  }
-},
+      
+      await this.loadProducts();
+      this.updateCartDisplay();
+
+    } catch (error) {
+      console.error(error);
+      container.innerHTML = `<p style="color:red; padding:20px;">Failed to load POS: ${error.message}</p>`;
+    }
+  },
 
   attachEvents() {
-    const catBar = document.getElementById('posCategoryBar');
-    if (catBar) {
-      catBar.addEventListener('click', (e) => {
-        const btn = e.target.closest('button');
-        if (!btn) return;
-
-        catBar.querySelectorAll('button').forEach(b => {
-          b.classList.remove('btn-primary');
-          b.classList.add('btn-outline');
-        });
-          btn.classList.add('btn-outline');
-          btn.classList.add('btn-primary');
-
-          this.setCategory(btn.dataset.category);
-        });
-      }
-
-    const searchInput = document.getElementById('searchProducts');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        this.searchQuery = e.target.value.toLowerCase();
-        this.filterAndRenderProducts();
+    // Category filters
+    document.getElementById('posCategoryBar')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      document.querySelectorAll('#posCategoryBar button').forEach(b => {
+        b.classList.remove('btn-primary'); b.classList.add('btn-outline');
       });
-    }
-
-    const custSelect = document.getElementById('customerSelect');
-    if (custSelect) {
-      custSelect.addEventListener('change', () => {
-        this.selectedCustomer = custSelect.value || null;
-        this.selectCustomer();
-      });
-    }
-
-    const vatSelect = document.getElementById('vatSelect');
-    if (vatSelect) {
-      vatSelect.addEventListener('change', (e) => {
-        this.vatRate = parseFloat(e.target.value);
-        this.updateCartDisplay();
-      });
-    }
-
-    const payMethod = document.getElementById('paymentMethod');
-    if (payMethod) {
-      payMethod.addEventListener('change', () => this.onPaymentMethodChange());
-    }
-    
-    document.getElementById('btnCheckout')?.addEventListener('click', () => this.checkout());
-    document.getElementById('btnClearCart')?.addEventListener('click', () => this.clearCart());
-  },
-
-  setCategory(cat) {
-    this.selectedCategory = cat;
-    this.filterAndRenderProducts();
-  },
-
-  onPaymentMethodChange() {
-    const method = document.getElementById('paymentMethod')?.value;
-    const creditSec = document.getElementById('creditTermsSection');
-
-    if (creditSec) {
-      creditSec.style.display = (method === 'credit')? 'block' : 'none';
-    }
-  },
-
-  getItemUnitPrice(p) {
-    if (this.customerCustomPrices[p.id] !== undefined && this.customerCustomPrices[p.id] !==null) {
-      return parseFloat(this.customerCustomPrices[p.id]);
-    }
-    const cust = this.customers.find(c => c.id === this.selectedCustomer);
-    const tier = (cust?.customer_type || 'retailer').toLowerCase();
-
-    if (tier === 'distributor' && p.distributor_price) return parseFloat(p.distributor_price);
-    if (tier === 'wholesaler' && p.wholesale_price) return parseFloat(p.wholesale_price);
-
-    return parseFloat(p.price || 0);
-  },
-
-  filterAndRenderProducts() {
-    const grid = document.getElementById('productGrid');
-    if(!grid) return;
-
-    const filtered = this.products.filter(p => {
-      const pCat = (p.category || '').toLowerCase();
-      const pName = (p.name || '').toLowerCase();
-
-      let matchesCat = true;
-      if (this.selectedCategory === 'pipe') matchesCat = pCat.includes('pipe') || pName.includes('pipe');
-      else if (this.selectedCategory === 'sack') matchesCat = pCat.includes('sack') || pNname.includes('sack');
-      else if (this.selectedCategory === 'fittings') matchesCat = pCat.includes('fitting') || pCat.includes('coupler');
-
-      if (!matchesCat) return false;
-      if (!this.searchQuery) return true;
-
-      return pName.includes(this.searchQuery) || pCat.includes(this.searchQuery);
+      btn.classList.remove('btn-outline'); btn.classList.add('btn-primary');
+      this.loadProducts(btn.dataset.category);
     });
 
-    if (filtered.length === 0) {
-      grid.innerHTML = '<p style="text-align-center; padding:20px; color:#64748b;">No products found.</p>';
+    // Search
+    document.getElementById('searchProducts')?.addEventListener('input', (e) => {
+      this.loadProducts(null, e.target.value.toLowerCase());
+    });
+
+    // Checkout
+    document.getElementById('btnCheckout')?.addEventListener('click', () => this.checkout());
+    
+    // Clear Cart
+    document.getElementById('btnClearCart')?.addEventListener('click', () => {
+      this.cart = [];
+      this.updateCartDisplay();
+    });
+  },
+
+  async loadProducts(category = 'all', search = '') {
+    const grid = document.getElementById('productGrid');
+    if (!grid) return;
+
+    try {
+      // Fetch secure products from backend
+      const response = await DB._fetch('/api/products');
+      let filtered = response || [];
+
+      if (category && category !== 'all') {
+        filtered = filtered.filter(p => (p.category || '').toLowerCase().includes(category));
+      }
+      if (search) {
+        filtered = filtered.filter(p => (p.name || '').toLowerCase().includes(search));
+      }
+
+      this.products = filtered;
+      this.renderProductGrid(filtered);
+    } catch (err) {
+      grid.innerHTML = `<p style="color:red;">Failed to load products.</p>`;
+    }
+  },
+
+  renderProductGrid(products) {
+    const grid = document.getElementById('productGrid');
+    if (products.length === 0) {
+      grid.innerHTML = '<p style="text-align:center; color:var(--text-muted);">No products found.</p>';
       return;
     }
 
-    grid.innerHTML = `<div class="product-grid">${filtered.map(p => {
-      const unitPrice = this.getItemUnitPrice(p);
-      const pName = Utils.escapeHtml(p.name);
-      const pCat = utils.escapeHtml(p.category || 'General');
-
-      return `
+    grid.innerHTML = `<div class="product-grid">${products.map(p => `
       <div class="product-card">
-        <h4>${pName}</h4>
-        <span class="stock">${pCat}</span>
-          <span class="price">KES ${Utils.formatCurrency(unitPrice)}</span>
-          <span class="stock" style="${p.stock <= 5 ? 'color:var(--danger);' : ''}">Stock: ${p.stock}</span>
-          
-          <button class="btn btn-primary btn-sm" style="margin-top:10px; width:100%;" 
-            data-id="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>
-            Add to Order
-          </button>
-        </div>
-      `;
-    }).join('')}</div>`;
-
-    // Attach click events to the new buttons safely
-    grid.querySelectorAll('button[data-id]').forEach(btn => {
-      btn.addEventListener('click', () => this.addToCart(btn.dataset.id));
-    });
+        <h4>${Utils.escapeHtml(p.name)}</h4>
+        <span class="price">KES ${Utils.formatCurrency(p.price)}</span>
+        <span class="stock">Stock: ${p.stock || 0}</span>
+        <button class="btn btn-primary btn-block" style="margin-top:10px;" onclick="POS.addToCart('${p.id}')" ${p.stock <= 0 ? 'disabled' : ''}>
+          Add to Order
+        </button>
+      </div>
+    `).join('')}</div>`;
   },
 
-  addToCart(id) {
-    const p = this.products.find(prod => prod.id === id);
-    if (!p) return;
+  addToCart(productId) {
+    const product = this.products.find(p => p.id === productId);
+    if (!product) return;
 
-    const unitPrice = this.getItemUnitPrice(p);
-    const exist = this.cart.find(i => i.productId === id);
-    
-    if (exist) {
-      exist.quantity += 1;
+    const existing = this.cart.find(item => item.productId === productId);
+    if (existing) {
+      existing.quantity += 1;
     } else {
-      this.cart.push({ productId: id, name: p.name, price: unitPrice, quantity: 1 });
+      this.cart.push({ 
+        productId: product.id, 
+        name: product.name, 
+        price: product.price, 
+        quantity: 1 
+      });
     }
     this.updateCartDisplay();
   },
 
   updateCartDisplay() {
-    const itemsEl = document.getElementById('cartItems');
+    const cartItems = document.getElementById('cartItems');
     const totalEl = document.getElementById('cartTotal');
-    if (!itemsEl || !totalEl) return;
+    if (!cartItems || !totalEl) return;
 
     if (this.cart.length === 0) {
-      itemsEl.innerHTML = '<p style="text-align:center; color:var(--text-muted); margin-top:20px;">Cart is empty.</p>';
+      cartItems.innerHTML = '<p style="text-align:center; color:var(--text-muted); margin-top:20px;">Cart is empty.</p>';
       totalEl.textContent = 'KES 0.00';
       return;
     }
 
     let subtotal = 0;
-    itemsEl.innerHTML = this.cart.map((item, idx) => {
-      const sub = item.price * item.quantity;
-      subtotal += sub;
+    cartItems.innerHTML = this.cart.map((item, idx) => {
+      subtotal += item.price * item.quantity;
       return `
         <div class="cart-item">
           <div class="cart-item-info">
             <span class="cart-item-title">${Utils.escapeHtml(item.name)}</span>
             <span class="cart-item-qty">${item.quantity} x KES ${Utils.formatCurrency(item.price)}</span>
           </div>
-          <span class="cart-item-price">KES ${Utils.formatCurrency(sub)}</span>
-          <button class="btn btn-danger btn-sm" data-remove="${idx}">&times;</button>
+          <span class="cart-item-price">KES ${Utils.formatCurrency(item.price * item.quantity)}</span>
+          <button class="btn btn-danger btn-sm" onclick="POS.removeFromCart(${idx})" style="padding:2px 6px;">&times;</button>
         </div>
       `;
     }).join('');
 
-    // Attach remove events
-    itemsEl.querySelectorAll('button[data-remove]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.cart.splice(parseInt(btn.dataset.remove), 1);
-        this.updateCartDisplay();
-      });
-    });
+    const vatRate = parseFloat(document.getElementById('vatSelect')?.value || 0.16);
+    const total = subtotal + (subtotal * vatRate);
+    totalEl.textContent = `KES ${Utils.formatCurrency(total)}`;
+  },
 
-    const vatAmount = subtotal * this.vatRate;
-    const grandTotal = subtotal + vatAmount;
-    totalEl.textContent = `KES ${Utils.formatCurrency(grandTotal)}`;
+  removeFromCart(index) {
+    this.cart.splice(index, 1);
+    this.updateCartDisplay();
   },
 
   async checkout() {
     if (this.cart.length === 0) return Utils.toast('Cart is empty.', 'warning');
 
-    const paymentMethod = document.getElementById('paymentMethod')?.value;
-    const paymentRef = document.getElementById('paymentRef')?.value.trim();
+    const paymentMethod = document.getElementById('paymentMethod')?.value || 'cash';
+    const paymentRef = document.getElementById('paymentRef')?.value.trim() || 'REF-' + Date.now();
     const btn = document.getElementById('btnCheckout');
 
-    if (paymentMethod !== 'credit' && !paymentRef) {
-      return Utils.toast('Enter payment transaction reference.', 'warning');
-    }
+    // SECURITY: Idempotency Key prevents double-charging
+    const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
 
-    // Set Loading state
-    const originalBtn = btn.innerHTML;
+    const originalText = btn.innerHTML;
     btn.innerHTML = '<span class="spinner"></span> Processing...';
     btn.disabled = true;
 
     try {
-      // 🔥 CRITICAL SECURITY NOTE: 
-      // We send productIds and quantities. 
-      // The backend MUST calculate the price. Do not trust `item.price` from the client.
       const payload = {
-        items: this.cart.map(i => ({ productId: i.productId, quantity: i.quantity })),
+        idempotency_key: idempotencyKey,
+        items: this.cart.map(i => ({ productId: i.productId, quantity: i.quantity })), // ONLY send ID and Qty
         paymentMethod,
         payment_reference: paymentRef,
         customer_id: this.selectedCustomer || null,
-        vat_rate: this.vatRate,
+        vat_rate: this.vatRate
       };
 
       const sale = await DB._fetch('/api/sales', {
@@ -249,70 +177,19 @@ const POS = {
         body: JSON.stringify(payload)
       });
 
-      Utils.toast(`Sale submitted! Ref: ${sale.id.slice(0,8)}`, 'success');
-      this.clearCart();
-      await this.loadProducts(); // Refresh stock
+      Utils.toast(`Sale successful! Total: KES ${sale.total}`, 'success');
+      this.cart = [];
+      this.updateCartDisplay();
+      this.loadProducts(); // Refresh stock
 
-    } catch (error) {
-      Utils.toast(error.message || 'Checkout failed', 'danger');
+    } catch (err) {
+      Utils.toast(err.message, 'danger');
     } finally {
-      btn.innerHTML = originalBtn;
+      btn.innerHTML = originalText;
       btn.disabled = false;
     }
-  },
-
-  clearCart() {
-    this.cart = [];
-    this.updateCartDisplay();
-  },
-
-  // ... [Keep loadProducts, loadCustomers, selectCustomer, and loadCategoryPricing methods mostly the same, but ensure they use Utils.escapeHtml when injecting names] ...
-  async loadProducts() {
-    try {
-      this.products = await DB._fetch('/api/products');
-      this.filterAndRenderProducts();
-    } catch (e) {
-      Utils.toast('Failed to load products', 'danger');
-    }
-  },
-
-  async loadCustomers() {
-    try {
-      this.customers = await DB._fetch('/api/customers') || [];
-      const sel = document.getElementById('customerSelect');
-      if (!sel) return;
-      
-      sel.innerHTML = '<option value="">Walk-in Customer [RETAIL]</option>';
-      this.customers.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c.id;
-        const tier = (c.customer_type || 'retailer').toUpperCase();
-        opt.textContent = `${c.name} [${tier}]`;
-        sel.appendChild(opt);
-      });
-    } catch (e) {}
-  },
-
-  async selectCustomer() {
-    this.customerCustomPrices = {};
-    if (this.selectedCustomer) {
-      try {
-        const cpList = await DB._fetch(`/api/customer-prices/${this.selectedCustomer}`);
-        (cpList || []).forEach(cp => {
-          this.customerCustomPrices[cp.product_id] = parseFloat(cp.custom_price);
-        });
-      } catch (_) {}
-    }
-    this.filterAndRenderProducts();
-    this.updateCartDisplay();
-  },
-
-  async loadCategoryPricing() {
-    try {
-      const rows = await DB._fetch('/api/category-pricing');
-      (rows || []).forEach(r => {
-        this.categoryPricing[(r.category || '').toLowerCase()] = r;
-      });
-    } catch (_) {}
   }
 };
+
+// Ensure app.js can find it
+window.POS = POS;
