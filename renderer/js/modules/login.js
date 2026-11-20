@@ -63,7 +63,8 @@ const Login = {
             localStorage.setItem('userId', data.id || '');
             
             // Reload to trigger app.js initApp()
-            location.reload(); 
+            //location.reload(); 
+            alert("Login successful! Check Application tab now.");
 
         } catch (error) {
             errorMsg.textContent = error.message;
