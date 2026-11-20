@@ -207,6 +207,7 @@ const POS = {
     const cart = document.querySelector('.pos-cart');
     if (cart) {
       cart.classList.toggle('open');
+      document.body.classList.toggle('cart-is-open');
     }
   },
 };

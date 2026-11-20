@@ -20,7 +20,12 @@
 
     <aside class="pos-cart">
         <div class="cart-header" style="display: flex; flex-direction: column; gap:8px;">
-            <label class="form-label" for="customerSelect">Select Customer</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <label class="form-label" for="customerSelect" style="margin-bottom: 0;">Select Customer</label>
+            <button class="btn btn-outline btn-sm mobile-close-cart" onclick="POS.toggleMobileCart()">
+                <i class="bi bi-arrow-left"></i> Products
+            </button>
+            </div>
             <select id="customerSelect" class="form-control">
                 <option value="">Walk-in Customer [RETAIL]</option>
             </select>

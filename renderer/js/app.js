@@ -188,7 +188,7 @@ function handleNavClick(e) {
   
   // Close sidebar on mobile after clicking
   if (window.innerWidth <= 768) {
-    document.querySelector('.sidebar')?.classList.remove('open');
+    window.toggleSidebar();
   }
   loadPage(page);
 }

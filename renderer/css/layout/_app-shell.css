@@ -253,6 +253,22 @@
   body.sidebar-is-open .sidebar-backdrop {
     display: block; 
   }
+  .mobile-close-cart {
+  display: none; /* Hidden on desktop */
+}
+
+@media (max-width: 768px) {
+  .mobile-close-cart {
+    display: flex !important; /* Show on mobile */
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* 🔴 Hide the sticky button when the cart is open */
+  body.cart-is-open .mobile-cart-btn {
+    display: none !important;
+  }
+}
 }
 
 /* User Profile Card in Sidebar */
