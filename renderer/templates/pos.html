@@ -30,20 +30,20 @@
             <p style="text-align:center; color:var(--text-muted); margin-top: 20px;">Cart is empty.</p>
         </div>
 
-        <div class="cart-footer">
-            <div class="form-group" style="margin-bottom: 16px;">
+        <div class="cart-footer" style="padding: 16px 20px;">
+            <div class="form-group" style="margin-bottom: 10px;">
                 <select id="vatSelect" class="form-control">
                     <option value="0.16">VAT Included (16%)</option>
                     <option value="0">VAT Exempt (0%)</option>
                 </select>
             </div>
 
-            <div class="cart-total" style="margin-bottom: 16px; padding-bottom: 16px; border-bottom:  1px solid var(--border);">
+            <div class="cart-total" style="margin-bottom: 12px; padding-bottom: 10px; border-bottom:  1px solid var(--border);">
                 <span>Total</span>
                 <span class="price-large" id="cartTotal">KES 0.00</span>
             </div>
 
-            <div class="form-group" style="margin-bottom: 12px;">
+            <div class="form-group" style="margin-bottom: 8px;">
                 <select id="paymentMethod" class="form-control">
                     <option value="mobile_money">MPESA / Mobile</option>
                     <option value="cash">Cash</option>
@@ -51,10 +51,10 @@
                 </select>
             </div>
 
-            <div class="form-group" style="margin-bottom: 20px;">
+            <div class="form-group" style="margin-bottom: 12px;">
                 <input type="text" id="paymentRef" class="form-control" placeholder="Transaction Ref #" />
             </div>
-            <button id="btnCheckout" class="btn btn-primary btn-block" style="padding: 14px;">
+            <button id="btnCheckout" class="btn btn-primary btn-block" style="padding: 6px;">
                 <i class="bi bi-send-check"></i> Submit Sale
             </button>
             <button id="btnClearCart" class="btn btn-secondary btn-block" style="margin-top: 8px;">

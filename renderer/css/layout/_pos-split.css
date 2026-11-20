@@ -174,10 +174,15 @@
 
 /* cart footer*/
 .cart-footer {
-  padding: 24px;
+  padding: 16px 20px;
   border-top: 1px solid var(--border);
   background-color: var(--bg-body);
   flex-shrink: 0;
+}
+
+.cart-footer .form-control {
+  padding: 8px 12px;
+  height: auto;
 }
 
 .cart-total {
