@@ -53,12 +53,18 @@ const POS = {
   },
 
   async loadProducts(category = 'all', search = '') {
+    console.log("1. loadProducts started");
+
     const grid = document.getElementById('productGrid');
+    console.log("2. Grid element found?", grid);
+
     if (!grid) return;
 
     try {
+      console.log("3. Attempting to fetch...");
       // Fetch secure products from backend
       const response = await DB._fetch('/api/products');
+      console.log("4. Fetch successful. Data:", response);
       let filtered = response || [];
 
       if (category && category !== 'all') {
