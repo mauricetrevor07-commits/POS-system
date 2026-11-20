@@ -16,17 +16,11 @@ async function initApp() {
   const role = localStorage.getItem('userRole');
 
 if (!token || !role) {
-  const appContainer = document.getElementById('app-container');
-  const loginContainer = document.getElementById('login-container');
+  
+  document.getElementById ('app-container').style.display = 'none';
+  document.getElementById ('login-container').style.display = 'flex';
 
-  if (appContainer) appContainer.style.display = 'none';
-  if (loginContainer) loginContainer.style.display = 'flex';
-
-  if (typeof Login !== 'undefined') {
-    Login.render();
-  } else {
-    console.error("Login module not loaded");
-  }
+  if (typeof Login !== 'undefined') Login.render();
   return;
 }
 
@@ -39,17 +33,16 @@ try{
     throw new Error('401');
   }
 
-  if (!response.ok) {
-    throw new Error(response.status.toString());
-  }
-
-  const BranchData = await response.json();
+  if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+  
+  const branchData = await response.json();
   currentBranch = branchData;
   window.currentBranch = currentBranch;
 
   const branchbadge = document.getElementById('branchBadge');
-  if (branchbadge) branchbadge.textContent = currentBranch.name;
-
+  if (branchbadge) {
+    branchbadge.textContent = currentBranch.name || 'Main Branch';
+  }
   currentUser = {
     token,
     role,
@@ -71,6 +64,7 @@ try{
   const hash = window.location.hash.replace('#', '').trim();
   const urlParams = new URLSearchParams(window.location.search);
   const targetPage = hash || urlParams.get('page') || 'pos';
+  
   loadPage(targetPage);
 
   } catch (error) {
