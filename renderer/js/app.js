@@ -32,9 +32,6 @@ if (!token || !role) {
 }
 
 try{
-  const res = await fetch('/api/branch', {
-    headers: { 'X-Auth-Token': token }
-  });
 
   if (!res.ok) throw new Error('Invalid token');
 
@@ -64,13 +61,17 @@ try{
   const hash = window.location.hash.replace('#', '').trim();
   const urlParams = new URLSearchParams(window.location.search);
   const targetPage = hash || urlParams.get('page') || 'pos';
-
+  const res = await fetch('/api/branch', {headers: { 'X-Auth-Token': token}});
+  if (!res.ok) throw new Error(res.status);
   loadPage(targetPage);
 
   } catch (e) {
   console.error("Auth failed:", e);
-  localStorage.clear();
-  location.reload();
+  if (e.message === '401' || e.message.includes('Invalid token')){
+    localStorage.clear();
+    location.reload();
+  } else {
+    alert("Server error, but you are still logged in. Check console.");
   }
 }
 
@@ -268,4 +269,4 @@ window.toggleSidebar = function() {
 };
 
 
-
+}
