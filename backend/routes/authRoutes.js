@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../database.js');
 
-const JWT_SECRET = 'autopak-super-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // POST /api/login
 router.post('/login', async (req, res) => {
