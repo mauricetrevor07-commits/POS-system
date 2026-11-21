@@ -64,11 +64,23 @@ const Products = {
 
   async loadList() {
     try {
+      console.log("fetching products...")
       this.products = await DB._fetch('/api/products');
-      if (this.viewMode === 'matrix') this.renderMatrixView();
-      else this.applyFilters();
+      console.log("Products loaded:", this.products);
+
+      if (this.viewMode === 'matrix') {
+        this.renderMatrixView();
+       } else {
+         this.applyFilters();
+       }
     } catch (e) {
-      document.getElementById('productListBody').innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger); padding:20px;">Failed to load products.</td></tr>`;
+      console.error("Error loading products:", e);
+      const tbody = document.getElementById('productListBody');
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger); padding:20px;">
+        Failed to load products: ${e.message}
+        </td></tr>`;
+      }
     }
   },
 
