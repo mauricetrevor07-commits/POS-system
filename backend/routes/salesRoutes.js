@@ -84,7 +84,29 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
 }));
 
 router.get('/', authMiddleware, asyncHandler(async (req, res) => {
-    res.json({ message: 'Sales history' });
+    const isAdmin = req.user.role === 'admin';
+    const userBranch = req.user.branch_id || 1;
+
+    let sql = `
+    select s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin
+    FFROM sales s
+    LEFT  JOIN customers c ON s.customer_id = c.id
+    `;
+    const params = [];
+
+    if (!isAdmin) {
+        sql += `where s.branch_id = $1`;
+        params.push(userBranch);
+    }
+
+    sql += " ORDER BY s.timestamp DESC";
+    const sales = await db.query(sql, params);
+
+    for (let sales of sales.rows) {
+        const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sales.id]);
+        sales.items = items.rows;
+    }
+    res.json(sales.rows);
 }));
 
 module.exports = router;

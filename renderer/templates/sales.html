@@ -1,0 +1,50 @@
+<div class="toolbar no-print">
+    <h2><i  class="bi bi-receipt"></i> Sales History </h2>
+</div>
+
+<div class="card no-print" style="margin-bottom: 24px;">
+    <div class="card-body" style="padding: 16px 20px;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+            <div style="flex: 2; min-width: 200px;">
+                <input type="text" id="salesSearchInput" class="form-control" placeholder="Search by ID, customer, reference, or item..."/>
+            </div>
+            <div style="flex: 1; min-width: 140px;">
+                <input type="date" id="salesFromDate" class="form-control" title="fromDate" />
+            </div>
+            <div style="flex: 1; min-width: 140px;">
+                <input type="date" id="salesToDate" class="form-control" title="From Date"/>
+            </div>
+            <div style="flex: 1; min-width: 140px;">
+                <select id="salesStatusFilter" class="form-control">
+                    <option value="all">All Statuses</option>
+                    <option value="approved">Approved</option>
+                    <option value="pending_payment">Pending Approval</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            
+            <div style="flex: 1; min-width: 140px;">
+                <select id="salesMethodFilter" class="form-control">
+                    <option value="all">All Methods</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                </select>
+            </div>
+
+         </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600;">Sales Records</span>
+            <span id="salesCountBadge" class="badge badge-neutral">0 records</span>
+        </div>
+
+        <div class="card-body" id="salesList" style="padding: 0; overflow-x: auto;">
+            <p style="text-align: center; padding: 30px; color: var(--text-muted);">Loading sales...</p>
+        </div>
+    </div>
