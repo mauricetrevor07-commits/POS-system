@@ -1,9 +1,85 @@
-<div class="toolbar">
-    <h2>Inventory</h2>
-    <button class="btn btn-primary"><i class="bi bi-plus"></i> Add Product</button>
-</div>
-<div class="card">
-    <div class="card-body">
-        <p>Product list and inventory management.</p>
+<div class="toolbar no-print" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap:12px; margin-bottom: 24px;">
+    <div> 
+    <h2 style="margin-bottom: 4px;">Product & Pricing Management</h2>
+    <div style="font-size: 0.85rem; color: var(--text-muted);">Manage inventory stock and tier prices (Retail, wholesale, Distributor)</div>
     </div>
+
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+
+        <div style="background: var(--bg-body); border-radius:8px; padding:3px; display: flex; gap: 2px; border: 1px solid var(--border);">
+            <button class="btn btn-sm btn-primary" id="btnViewInventory">
+                <i class="bi bi-boxes"></i> Inventory
+            </button>
+            <button class="btn btn-sm btn-primary" id="btnViewInventory">
+                <i class="bi bi-boxes"></i>Inventory
+            </button>
+            <button class="btn btn-sm btn-outline" id="btnViewMatrix" style="border:none; background: transparent; color: var(--text-muted);">
+                <i class="bi bi-tags-fill"></i> Price Matrix
+            </button>
+        </div>
+
+        <button class="btn btn-outline" id="btnExportTenplate">
+            <i class=" bi bi-file-earmark-excel"></i> Export Template
+        </button>
+        <button class="btn btn-outline" id="btnImportStock">
+            <i class="bi bi-upload"></i> Import Stock
+        </button>
+        <button class="btn btn-primary" id="btnAddProduct">
+            <i class="bi bi-plus-lg"></i> Add Product
+        </button>
+    </div>
+</div>
+
+<div id="inventoryViewContainer">
+    <div class="card no-print" style="margin-bottom:16px;">
+        <div class="card-body" style="padding: 14px 20px; display: flex; gap:12px; flex-wrap: wrap; align-items: center;">
+            <div style="flex: 2; min-width: 200px;">
+                <input type="text" id="prodSearchInput" class="form-control" placeholder="Search by name, barcode or category..." />
+            </div>
+
+            <div style="flex:1; min-width: 160px;">
+                <select id="prodCatFilter" class="form-control">
+                    <option value="all">All Categories</option>
+                    <option value="pipe">HDPE Pipes</option>
+                    <option value="sack">Heavy Duty Sacks</option>
+                    <option value="fitting">Fittngs & Accessories</option>
+                </select>
+            </div>
+            <div style="flex:1; min-width: 160px;">
+                <select id="prodStockFilter" class="form-control">
+                    <option value="all">All Stock Status</option>
+                    <option value="in_stock">In Stock (>0)</option>
+                    <option value="low_stock">Low Stock (< 10)</option>
+                    <option value="out_of_stock">Out of Stock (0)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: 600;">Product Inventory</span>
+            <span id="prodCountBadge" class="badge badge-neutral">0 items</span>
+        </div>
+        <div class="card-body" id="productList" style="padding: 0; overflow-x: auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Product Description</th>
+                        <th>Category</th>
+                        <th>Retail Price</th>
+                        <th>Wholesale Price</th>
+                        <th>Distributor Price</th>
+                        <th>Current Stock</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="productListBody">
+                    <tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<div id="matrixViewContainer" class="hidden">
+    
 </div>

@@ -11,7 +11,7 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
   const branchId = isStaff ? (req.user.branch_id || 1) : (parseInt(req.query.branch_id) || req.user.branch_id || 1);
 
   const result = await db.query(
-    `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock, COALESCE(bs.stock, 0)::real AS branch_stock
+    `SELECT p.*, COALESCE(bs.stock, 0)::real AS stock
      FROM products p
      LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
      ORDER BY p.name`,
@@ -20,75 +20,96 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
   res.json(result.rows);
 }));
 
-// POST /api/products (Admin Only)
+// POST /api/products (Create)
 router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const id = randomUUID();
-  const { name, price, wholesale_price, distributor_price, barcode, category, stock, branch_id } = req.body;
+  const { name, price, wholesale_price, distributor_price, category, stock, barcode } = req.body;
+  const targetBranch = req.user.branch_id || 1;
   const initialStock = parseFloat(stock) || 0;
-  const targetBranch = parseInt(branch_id) || 1;
 
   await db.query(
-    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, barcode, category) 
+    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, category, barcode) 
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [
-      id, name, parseFloat(price) || 0,
-      wholesale_price !== undefined && wholesale_price !== null && wholesale_price !== '' ? parseFloat(wholesale_price) : null,
-      distributor_price !== undefined && distributor_price !== null && distributor_price !== '' ? parseFloat(distributor_price) : null,
-      initialStock, barcode || null, category || null
-    ]
+    [id, name, parseFloat(price), wholesale_price, distributor_price, initialStock, category, barcode]
   );
 
-  // Initialize branch_stock
   const branches = await db.query("SELECT id FROM branches");
   for (const b of branches.rows) {
     const bStock = b.id === targetBranch ? initialStock : 0;
     await db.query(
-      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
-       ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = $3`,
+      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)`,
       [b.id, id, bStock]
     );
   }
 
-  res.status(201).json({ id, ...req.body, stock: initialStock });
+  res.status(201).json({ id, name, price, stock: initialStock });
 }));
 
-// PUT /api/products/:id (Admin Only)
+// PUT /api/products/:id (Update)
 router.put('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
-  const allowed = ['name','price','wholesale_price','distributor_price','stock','barcode','category'];
-  const data = {};
-  
-  allowed.forEach(k => {
-    if (req.body[k] !== undefined) {
-      if (k === 'price' || k === 'wholesale_price' || k === 'distributor_price' || k === 'stock') {
-        data[k] = req.body[k] !== '' && req.body[k] !== null ? parseFloat(req.body[k]) : null;
-      } else {
-        data[k] = req.body[k];
-      }
-    }
-  });
+  const { name, price, wholesale_price, distributor_price, category, stock, barcode } = req.body;
+  const targetBranch = req.user.branch_id || 1;
 
-  if (Object.keys(data).length) {
-    const set = Object.keys(data).map((k, i) => `"${k}"=$${i+1}`).join(',');
-    const vals = Object.values(data);
-    await db.query(`UPDATE products SET ${set}, updated_at=NOW() WHERE id=$${vals.length+1}`, [...vals, req.params.id]);
+  await db.query(
+    `UPDATE products 
+     SET name=$1, price=$2, wholesale_price=$3, distributor_price=$4, category=$5, barcode=$6, updated_at=NOW() 
+     WHERE id=$7`,
+    [name, parseFloat(price), wholesale_price, distributor_price, category, barcode, req.params.id]
+  );
 
-    if (data.stock !== undefined && data.stock !== null) {
-      const targetBranch = parseInt(req.body.branch_id) || 1;
-      await db.query(
-        `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
-         ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = $3`,
-        [targetBranch, req.params.id, data.stock]
-      );
+  if (stock !== undefined) {
+    await db.query(
+      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+       ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = $3`,
+      [targetBranch, req.params.id, parseFloat(stock)]
+    );
+    // Keep master stock in sync for the primary branch
+    if (targetBranch === 1) {
+      await db.query(`UPDATE products SET stock = $1 WHERE id = $2`, [parseFloat(stock), req.params.id]);
     }
   }
+
   res.json({ success: true });
 }));
 
-// DELETE /api/products/:id (Admin Only)
+// DELETE /api/products/:id
 router.delete('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   await db.query('DELETE FROM branch_stock WHERE product_id = $1', [req.params.id]);
-  await db.query('DELETE FROM products WHERE id=$1', [req.params.id]);
+  await db.query('DELETE FROM products WHERE id = $1', [req.params.id]);
   res.json({ success: true });
+}));
+
+// POST /api/products/bulk-tier-prices
+router.post('/bulk-tier-prices', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
+  const { updates } = req.body;
+  if (!updates || !updates.length) return res.status(400).json({ error: 'No updates' });
+
+  for (const u of updates) {
+    await db.query(
+      `UPDATE products 
+       SET price=$1, wholesale_price=$2, distributor_price=$3, updated_at=NOW() 
+       WHERE id=$4`,
+      [u.price, u.wholesale_price, u.distributor_price, u.id]
+    );
+  }
+  res.json({ success: true, updatedCount: updates.length });
+}));
+
+// POST /api/products/import-stock
+router.post('/import-stock', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
+  const { items } = req.body;
+  const targetBranch = req.user.branch_id || 1;
+  
+  for (const item of items) {
+    await db.query(
+      `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, $3)
+       ON CONFLICT (branch_id, product_id) DO UPDATE SET stock = branch_stock.stock + $3`,
+      [targetBranch, item.id, item.stock_to_add]
+    );
+    await db.query(`UPDATE products SET stock = stock + $1 WHERE id = $2`, [item.stock_to_add, item.id]);
+  }
+  
+  res.json({ success: true, updatedCount: items.length });
 }));
 
 module.exports = router;
