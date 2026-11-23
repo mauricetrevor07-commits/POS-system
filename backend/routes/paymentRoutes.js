@@ -38,10 +38,10 @@ router.get('/credit-alerts', authMiddleware, asyncHandler(async (req, res) => {
         // FIXED: Removed missing dueDate column, using NULL as placeholder
         const result = await db.query(`
             SELECT s.*, c.name as customer_name, c.phone as customer_phone, CONCAT('Branch ', s.branch_id) as branch_name,
-                   NULL as days_until_due
+                   (s.due_date - CURRENT_DATE) as days_until_due
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
-            WHERE s."paymentMethod" = 'credit' AND s.status != 'settled'
+            WHERE s.paymentmethod = 'credit' AND s.status != 'settled'
             ORDER BY s."timestamp" DESC
         `);
 
@@ -49,14 +49,30 @@ router.get('/credit-alerts', authMiddleware, asyncHandler(async (req, res) => {
         let overdue_count = 0;
         let due_today_count = 0;
 
-        // Since we don't have due dates yet, we won't calculate overdue status
+        
         sales.forEach(sale => {
-            sale.alert_level = 'upcoming'; // Default for now
+            if (sale.days_until_due === null){
+            sale.alert_level = 'upcoming';
+            return;
+            }
+
+            const days = parseFloat(sale.days_until_due);
+            if (days < 0) {
+                overdue_count++;
+                sale.alert_level = 'overdue';
+            } else if (days === 0) {
+                due_today_count++;
+                sale.alert_level = 'due_today';
+            } else if (days <= 3) {
+                sale.alert_level = 'due_soon';
+            } else {
+                sale.alert_level = 'upcoming';
+            }
         });
 
         res.json({
-            overdue_count: 0,
-            due_today_count: 0,
+            overdue_count,
+            due_today_count,
             all: sales
         });
     } catch (error) {
