@@ -63,10 +63,15 @@ const Products = {
   },
 
   async loadList() {
+    const tbody = document.getElementById('productListBody');
+
     try {
-      console.log("fetching products...")
-      this.products = await DB._fetch('/api/products');
-      console.log("Products loaded:", this.products);
+      console.log("fetching products from API...")
+
+      const response = await DB._fetch('/api/products');
+
+      this.products = Array.isArray(response) ? response : [];
+      console.log(`successfully loaded ${this.products.length} products.`);
 
       if (this.viewMode === 'matrix') {
         this.renderMatrixView();
@@ -75,9 +80,9 @@ const Products = {
        }
     } catch (e) {
       console.error("Error loading products:", e);
-      const tbody = document.getElementById('productListBody');
+
       if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger); padding:20px;">
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger); padding:20px; font-weight:bold;">
         Failed to load products: ${e.message}
         </td></tr>`;
       }
@@ -89,7 +94,9 @@ const Products = {
     const cat = document.getElementById('prodCatFilter')?.value || 'all';
     const stock = document.getElementById('prodStockFilter')?.value || 'all';
 
-    this.filteredProducts = this.products.filter(p => {
+    const safeProducts = Array.isArray(this.products) ? this.products : [];
+
+    this.filteredProducts = safeProducts.filter(p => {
       const pCat = (p.category || '').toLowerCase();
       const pName = (p.name || '').toLowerCase();
       
@@ -117,7 +124,10 @@ const Products = {
     if (badge) badge.textContent = `${this.filteredProducts.length} of ${this.products.length} items`;
 
     const tbody = document.getElementById('productListBody');
-    if (!tbody) return;
+    if (!tbody) {
+      console.error("DOM Error: #productListBody not found in the HTML.");
+      return;
+    }
 
     if (this.filteredProducts.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">No products found.</td></tr>';
