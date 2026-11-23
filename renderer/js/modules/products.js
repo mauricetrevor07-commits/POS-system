@@ -1,5 +1,3 @@
-console.log("🔥 products.js loaded into browser!");
-
 const Products = {
   products: [],
   filteredProducts: [],
@@ -60,21 +58,14 @@ const Products = {
   },
 
   async loadList() {
-    console.log("1. Starting LoadList...");
     const tbody = document.getElementById('productListBody');
 
     try {
       const response = await DB._fetch('/api/products');
-      // FIXED: Array must be capitalized
-      console.log("2. API response received. Is it an Array?", Array.isArray(response)); 
-      console.log("3. Number of items:", response.length);
-
       this.products = Array.isArray(response) ? response : [];
-      console.log("4. calling apply filters()...");
       this.applyFilters();
 
     } catch (e) {
-      console.error("🔥 Error loading products:", e);
       if (tbody) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--danger); padding:20px; font-weight:bold;">
         Failed to load products: ${e.message}
@@ -84,7 +75,6 @@ const Products = {
   },
 
   applyFilters() {
-    console.log("5. inside apply filters. total products:", this.products.length);
     const query = (document.getElementById('prodSearchInput')?.value || '').toLowerCase();
     const cat = document.getElementById('prodCatFilter')?.value || 'all';
     const stock = document.getElementById('prodStockFilter')?.value || 'all';
@@ -111,13 +101,10 @@ const Products = {
       return true;
     });
 
-    console.log("6. Filtered products count:", this.filteredProducts.length);
-    console.log("7. calling renderInventoryTable()...");
     this.renderInventoryTable();
   },
 
   renderInventoryTable() {
-    console.log("8. Inside renderInventoryTable...");
     const badge = document.getElementById('prodCountBadge');
     if (badge) badge.textContent = `${this.filteredProducts.length} of ${this.products.length} items`;
 
@@ -128,12 +115,11 @@ const Products = {
     }
 
     if (this.filteredProducts.length === 0) {
-      console.log("10. no products found after filter. rendering empty state.");
       tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">No products found.</td></tr>';
       return;
     }
 
-    console.log("10. rendering rows...");
+    
     try {
       tbody.innerHTML = this.filteredProducts.map(p => {
         const isLow = p.stock <= 5;
@@ -160,11 +146,9 @@ const Products = {
             </td>
           </tr>
         `;
-      }).join('');
-      console.log("11. rows rendered successfully!");
+      }).join('')
 
     } catch (err) {
-      console.error("🔥 error rendering html:", err);
       // FIXED: Extra > removed
       tbody.innerHTML = `<tr><td colspan="7" style="color:red; padding:20px;">HTML render error: ${err.message}</td></tr>`;
     }
