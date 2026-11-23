@@ -114,7 +114,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
 
     } catch (error) {
         console.error('Error generating sales summary report:', error);
-        res.status(500).json({ error: 'Failed to generate report' });
+        res.status(500).json({ error: 'Failed to generate report', details: error.message });
     }
 }));
 
