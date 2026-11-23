@@ -13,6 +13,7 @@ const productRoutes = require('./routes/productRoutes');
 const userRoutes = require('./routes/userRoutes');
 const branchRoutes = require('./routes/branchRoutes');
 const paymentRoutes = require('./routes/paymentRoutes.js');
+const reportRoutes = require('./routes/reportRoutes.js');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -32,6 +33,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/branch', branchRoutes);
 app.use('/api', paymentRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.all('/api/*', (req, res) => {
   res.status(404).json({ error: `API route ${req.method} ${req.originalUrl} not found`});
