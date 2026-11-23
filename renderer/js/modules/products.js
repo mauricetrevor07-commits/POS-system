@@ -1,3 +1,5 @@
+const { array } = require("node:stream/iter");
+
 const Products = {
   products: [],
   filteredProducts: [],
@@ -63,21 +65,20 @@ const Products = {
   },
 
   async loadList() {
+    console.log("1. Starting LoadList...");
     const tbody = document.getElementById('productListBody');
+    if (!tbody) console.error(" cannot find product list in the DOM");
 
     try {
-      console.log("fetching products from API...")
-
+      
       const response = await DB._fetch('/api/products');
+      console.log("2. API response received.", array.isArray(response));
+      console.log("3. Number of items:", response.length);
 
       this.products = Array.isArray(response) ? response : [];
-      console.log(`successfully loaded ${this.products.length} products.`);
-
-      if (this.viewMode === 'matrix') {
-        this.renderMatrixView();
-       } else {
-         this.applyFilters();
-       }
+      console.log("4. calling apply filters()...");
+       this.applyFilters();
+       
     } catch (e) {
       console.error("Error loading products:", e);
 
@@ -90,6 +91,7 @@ const Products = {
   },
 
   applyFilters() {
+    console.log("5. inside apply filters. total products:", this.products.length);
     const query = (document.getElementById('prodSearchInput')?.value || '').toLowerCase();
     const cat = document.getElementById('prodCatFilter')?.value || 'all';
     const stock = document.getElementById('prodStockFilter')?.value || 'all';
@@ -116,10 +118,15 @@ const Products = {
       return true;
     });
 
+    console.log("6. Filtered products count:", this.filteredProducts.length);
+    console.log("7. calling renderInventoryTable()...");
+
     this.renderInventoryTable();
   },
 
   renderInventoryTable() {
+    console.log("8.Inside renderInventoryTable...");
+
     const badge = document.getElementById('prodCountBadge');
     if (badge) badge.textContent = `${this.filteredProducts.length} of ${this.products.length} items`;
 
@@ -129,11 +136,14 @@ const Products = {
       return;
     }
 
+    console.log("9. Found tbody. Checking if empty...");
     if (this.filteredProducts.length === 0) {
+      console.log("10. no products found after filter. rendering empty state.");
       tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">No products found.</td></tr>';
       return;
     }
-
+    console.log("10. rendering rows...");
+    try {
     tbody.innerHTML = this.filteredProducts.map(p => {
       const isLow = p.stock <= 5;
       const isOut = p.stock <= 0;
@@ -160,8 +170,13 @@ const Products = {
         </tr>
       `;
     }).join('');
-  },
+    console.log("11. rows rendered successfully!");
 
+  } catch (err) {
+    console.error(" error rendering html:", err);
+    tbody.innerHTML = `<tr><td> colspan="7" style="color:red; padding:20px;">HTML render error: ${err.message}</td></tr>`;
+  }
+},
   renderMatrixView() {
     const container = document.getElementById('matrixViewContainer');
     
