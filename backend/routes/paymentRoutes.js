@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database.js');
-const {authMiddleware} = require('../middleware/auth.js');
+const { authMiddleware } = require('../middleware/auth.js');
 const { asyncHandler} = require('../middleware/errorHandler.js');
 
 router.get('/pending-payments', authMiddleware, asyncHandler(async (req, res) =>
@@ -13,7 +13,7 @@ router.get('/pending-payments', authMiddleware, asyncHandler(async (req, res) =>
         LEFT JOIN customers c ON s.customer_id = c.id
         LEFT JOIN branches b ON s.branch_id = b.id
         WHERE s.status = 'pending' OR s.payment_status = 'pending_payment'
-        ORDER BY s.timestamp DESC
+        ORDER BY s."timestamp" DESC
         `);
 
         for (let sale of result.rows) {
@@ -32,12 +32,12 @@ router.get('/credit-alerts', authMiddleware, asyncHandler(async (req, res) => {
     try {
         const result = await db.query(`
             SELECT s.*, c.name as customer_name, c.phone as customer_phone, b.name as branch_name,
-            EXTRACT(DAY FROM (s.due_date - CURRENT_DATE)) as days_until_due
+            (s."due_date"::date - CURRENT_DATE)) as days_until_due
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
             LEFT JOIN branches b ON s.branch_id = b.id
-            WHERE s.paymentMethod = 'crredit' AND s.status != 'settled'
-            ORDER BY s.due_date ASC
+            WHERE s."paymentMethod" = 'crredit' AND s.status != 'settled'
+            ORDER BY s."due_date" ASC
              `);
 
              const sales= result.rows;
