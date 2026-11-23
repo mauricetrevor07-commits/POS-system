@@ -3,6 +3,7 @@ const DB = {
     const token = localStorage.getItem('authToken') || '';
     const res = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers: {
         'X-Auth-Token': token,
         'Content-Type': 'application/json',
