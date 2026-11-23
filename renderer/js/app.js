@@ -224,11 +224,20 @@ async function loadPage(page) {
     else if (page === 'reports' && window.Reports) {
       await Reports.render()
     }
-    else if (page === 'products' && window.Customers) {
+    else if (page === 'products' && window.Products) {
+      await Products.render();
+    }
+    else if (page === 'customers' && window.Customers) {
       await Customers.render();
+    }
+    else if (page === 'sales' && window.Sales) {
+      await Sales.render();
     }
     else if (page === 'users' && window.Users) {
       await Users.render();
+    }
+    else if (page === 'transfers' && window.Transfers) {
+      await Transfers.render();
     }
     else if (page === 'settings'&& window.Settings) {
       await Settings.render();
