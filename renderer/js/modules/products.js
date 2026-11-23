@@ -1,5 +1,3 @@
-const { array } = require("node:stream/iter");
-
 const Products = {
   products: [],
   filteredProducts: [],
