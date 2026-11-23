@@ -7,7 +7,7 @@ const Sales = {
     container.innerHTML = '<div style="padding:40px; text-align:center;">Loading Sales History...</div>';
 
     try{
-      const response = await fetch('/template/sales.html');
+      const response = await fetch('/templates/sales.html');
       if (!response.ok) throw new Error('Sales template not found');
 
       container.innerHTML = await response.text();
@@ -107,7 +107,7 @@ renderList() {
 
       const itemsStr = (s.items || []).map(i => `${Utils.escapeHtml(i.productName || i.productname)} (x${i.quantity})`).join(', ');
       const subtotalVal = s.subtotal !== null && s.subtotal !== undefined ? parseFloat(s.subtotal) : parseFloat(s.total || 0);
-      const vatVal = s.vat_amount !== null && s.sub_amount !== undefined ? parseFloat(s.vat_amount) : 0;
+      const vatVal = s.vat_amount !== null && s.vat_amount !== undefined ? parseFloat(s.vat_amount) : 0;
 
       return `
       <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">

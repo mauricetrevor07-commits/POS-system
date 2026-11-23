@@ -28,7 +28,7 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
         const checkExisting = await client.query('SELECT id FROM sales WHERE idempotency_key = $1', [idempotency_key]);
             if (checkExisting.rows.length > 0) {
             await client.query('ROLLBACK');
-            return res.status(200).json({success: true, message: 'sale already processed', saleId: checkExisting.rows[0],id });
+            return res.status(200).json({success: true, message: 'sale already processed', saleId: checkExisting.rows[0].id });
         }
 
         const saleBranchId = req.user.role === 'staff' ? (req.user.branch_id || 1) : (parseInt(branch_id) || req.user.branch_id || 1);
@@ -53,7 +53,7 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
             }
             const price = product.price;
             subtotal += price * item.quantity;
-            evaluatedItems.push({ productId: item.productId, productName: productname, quantity: item.quantity, price });
+            evaluatedItems.push({ productId: item.productId, productName: product.name, quantity: item.quantity, price });
         }
         const vatRate = vat_rate !== undefined ? parseFloat(vat_rate) : 0.16;
         const vatAmount = vatRate > 0 ? Math.round(subtotal * vatRate * 100)/ 100 : 0;
@@ -89,7 +89,7 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
 
     let sql = `
     select s.*, c.name AS customer_name, c.kra_pin AS customer_kra_pin
-    FFROM sales s
+    FROM sales s
     LEFT  JOIN customers c ON s.customer_id = c.id
     `;
     const params = [];
@@ -102,9 +102,9 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     sql += " ORDER BY s.timestamp DESC";
     const sales = await db.query(sql, params);
 
-    for (let sales of sales.rows) {
-        const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sales.id]);
-        sales.items = items.rows;
+    for (let sale of sales.rows) {
+        const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sale.id]);
+        sale.items = items.rows;
     }
     res.json(sales.rows);
 }));
