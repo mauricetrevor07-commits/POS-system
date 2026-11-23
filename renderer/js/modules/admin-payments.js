@@ -6,39 +6,24 @@ const AdminPayments = {
 
   async render() {
     const container = document.getElementById('page-content');
-    container.innerHTML = `
-      <div class="toolbar no-print">
-        <h2><i class="bi bi-shield-check"></i> Admin Payment Approvals & Credit Alerts</h2>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-outline btn-sm" onclick="AdminPayments.refresh()">
-            <i class="bi bi-arrow-clockwise"></i> Refresh
-          </button>
-        </div>
-      </div>
+    container.innerHTML = '<div style="padding:40px; text-align:center;">Loading...</div>';
 
-      <!-- Overdue Alert Banner (if any) -->
-      <div id="creditAlertBanner" style="display:none; margin-bottom:16px;"></div>
+    try{
+      const response = await fetch('/templates/pending-payments.html');
+      if (!response.ok) throw new Error('Template not found');
+      let html = await response.text();
 
-      <!-- Navigation Tabs -->
-      <div class="no-print" style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:8px;">
-        <button id="tabPendingBtn" class="btn ${this.activeTab === 'pending' ? 'btn-primary' : 'btn-outline'}" onclick="AdminPayments.switchTab('pending')">
-          <i class="bi bi-hourglass-split"></i> Pending Payment Approvals
-          <span id="pendingCountBadge" class="badge badge-warning" style="margin-left:6px;">0</span>
-        </button>
-        <button id="tabCreditBtn" class="btn ${this.activeTab === 'credit' ? 'btn-primary' : 'btn-outline'}" onclick="AdminPayments.switchTab('credit')">
-          <i class="bi bi-exclamation-triangle"></i> Credit Sales Due Alerts
-          <span id="creditOverdueBadge" class="badge badge-danger" style="margin-left:6px; display:none;">0</span>
-        </button>
-      </div>
+      html = html.replace('${this.activeTab === \'pending\' ? \'btn-primary\' : \'btn-outline\'}', this.activeTab === 'pending' ? 'btn-primary' : 'btn-outline');
+      html = html.replace('${this.activeTab === \'credit\' ? \'btn-primary\' : \'btn-outline\'}', this.activeTab === 'credit' ? 'btn-primary' : 'btn-outline');
 
-      <!-- Tab Content Area -->
-      <div id="adminPaymentsTabContent">
-        <div class="loading-spinner"></div>
-      </div>
-    `;
-
-    await this.refresh();
-  },
+      container.innerHTML = html;
+    
+        await this.refresh();
+   } catch (error) {
+    console.error(error);
+    container.innerHTML = `<p style="color: red;>Failed to load credit alerts: ${error.message}</p>`;
+  }
+  }   
 
   async refresh() {
     await Promise.all([this.loadPending(), this.loadCreditAlerts()]);
