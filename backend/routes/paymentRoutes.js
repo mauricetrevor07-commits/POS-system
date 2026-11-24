@@ -19,7 +19,7 @@ router.get('/pending-payments', authMiddleware, asyncHandler(async (req, res) =>
         `);
         
         for (let sale of result.rows) {
-            const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sale.id]);
+            const items = await db.query('SELECT * FROM sale_items WHERE "saleid" = $1', [sale.id]);
             sale.items = items.rows;
         }
         

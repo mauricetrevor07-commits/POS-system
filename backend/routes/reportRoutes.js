@@ -7,22 +7,20 @@ const { asyncHandler } = require('../middleware/errorHandler');
 router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
     const { from, to, branch_id } = req.query;
 
-    // Build dynamic WHERE clauses for dates and branch
-    let salesWhere = `s.status != 'pending'`; // Exclude pending payments
+    let salesWhere = `s.status != 'pending'`; 
     let itemWhere = `s.status != 'pending'`;
     const salesParams = [];
     const itemParams = [];
 
     if (from) {
-        salesWhere += ` AND s.timestamp >= $${salesParams.length + 1}`;
-        itemWhere += ` AND s.timestamp >= $${itemParams.length + 1}`;
+        salesWhere += ` AND s."timestamp" >= $${salesParams.length + 1}`;
+        itemWhere += ` AND s."timestamp" >= $${itemParams.length + 1}`;
         salesParams.push(from);
         itemParams.push(from);
     }
     if (to) {
-        // Append time to make it end of day
-        salesWhere += ` AND s.timestamp <= $${salesParams.length + 1}`;
-        itemWhere += ` AND s.timestamp <= $${itemParams.length + 1}`;
+        salesWhere += ` AND s."timestamp" <= $${salesParams.length + 1}`;
+        itemWhere += ` AND s."timestamp" <= $${itemParams.length + 1}`;
         salesParams.push(`${to} 23:59:59`);
         itemParams.push(`${to} 23:59:59`);
     }
@@ -34,7 +32,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
     }
 
     try {
-        // 1. Get Total Revenue and Total Sales Count
+        // 1. KPI Query
         const kpiQuery = `
             SELECT 
                 COALESCE(COUNT(s.id), 0) as total_sales,
@@ -45,64 +43,77 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
         const kpiResult = await db.query(kpiQuery, salesParams);
         const kpi = kpiResult.rows[0];
 
-        // 2. Get Pipes and Sacks Sold (using category names)
+        // 2. Pipes/Sacks Query (FIXED: snake_case)
         const categoryQuery = `
             SELECT 
                 COALESCE(SUM(CASE WHEN LOWER(p.category) LIKE '%pipe%' THEN si.quantity ELSE 0 END), 0) as total_pipes_sold,
                 COALESCE(SUM(CASE WHEN LOWER(p.category) LIKE '%sack%' THEN si.quantity ELSE 0 END), 0) as total_sacks_sold
             FROM sale_items si
-            JOIN sales s ON si."saleId" = s.id
-            LEFT JOIN products p ON si."productId" = p.id
+            JOIN sales s ON si.saleid = s.id
+            LEFT JOIN products p ON si.productid = p.id
             WHERE ${itemWhere}
         `;
         const categoryResult = await db.query(categoryQuery, itemParams);
         const categories = categoryResult.rows[0];
 
-        // 3. Get Products Sold Breakdown
+        // 3. Products Sold Query (FIXED: snake_case)
         const productsSoldQuery = `
             SELECT 
-                si."productName" as productname,
+                si.productname as productname,
                 COALESCE(p.category, 'General') as category,
                 SUM(si.quantity) as quantity_sold,
                 AVG(si.price) as avg_price,
                 SUM(si.quantity * si.price) as total_revenue
             FROM sale_items si
-            JOIN sales s ON si."saleId" = s.id
-            LEFT JOIN products p ON si."productId" = p.id
+            JOIN sales s ON si.saleid = s.id
+            LEFT JOIN products p ON si.productid = p.id
             WHERE ${itemWhere}
-            GROUP BY si."productName", p.category
+            GROUP BY si.productname, p.category
             ORDER BY total_revenue DESC
         `;
         const productsSoldResult = await db.query(productsSoldQuery, itemParams);
 
-        // 4. Get Stock Remaining
+        // 4. Stock Remaining Query (with table existence check)
         let stockQuery;
         const stockParams = [];
         
-        if (branch_id) {
-            // If a specific branch is selected, use branch_stock
+        const tableCheck = await db.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = 'branch_stock'
+            ) as exists
+        `);
+        const hasBranchStock = tableCheck.rows[0].exists;
+
+        if (branch_id && hasBranchStock) {
             stockQuery = `
                 SELECT p.id, p.name, COALESCE(p.category, 'General') as category, p.price,
                        COALESCE(bs.stock, 0) as stock
                 FROM products p
-                LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
+                LEFT JOIN branch_stock bs ON p.id = bs.productid AND bs.branch_id = $1
                 ORDER BY p.name ASC
             `;
             stockParams.push(parseInt(branch_id));
-        } else {
-            // If ALL branches, sum up the stock from branch_stock, or fallback to p.stock
+        } else if (hasBranchStock) {
             stockQuery = `
                 SELECT p.id, p.name, COALESCE(p.category, 'General') as category, p.price,
                        COALESCE(SUM(bs.stock), p.stock, 0) as stock
                 FROM products p
-                LEFT JOIN branch_stock bs ON p.id = bs.product_id
+                LEFT JOIN branch_stock bs ON p.id = bs.productid
                 GROUP BY p.id, p.name, p.category, p.price, p.stock
+                ORDER BY p.name ASC
+            `;
+        } else {
+            // Fallback if branch_stock doesn't exist
+            stockQuery = `
+                SELECT p.id, p.name, COALESCE(p.category, 'General') as category, p.price,
+                       p.stock as stock
+                FROM products p
                 ORDER BY p.name ASC
             `;
         }
         const stockResult = await db.query(stockQuery, stockParams);
 
-        // Send the consolidated response to the frontend
         res.json({
             total_sales: kpi.total_sales,
             total_amount: kpi.total_amount,

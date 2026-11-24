@@ -105,7 +105,16 @@ const Reports = {
 
     } catch (e) {
       console.error('Failed to generate report:', e);
-      if (printableReport) printableReport.innerHTML = `<p style="color:var(--danger); padding:20px;">Failed to generate report: ${e.message}</p>`;
+      let errBox = document.getElementById('reportErrorBox');
+      if (!errBox) {
+        errBox = document.getElementById('reportErrorBox');
+        errBox.id = 'reportErrorBox';
+        errBox.style.cssText = 'color:var(--danger); padding:14px 20px; background: #fef2f2; border: 1px solid #f87171; border-radius: 8px; margin-bottom:12px;';
+        const target = document.getElementById('printableReportSection');
+        if (target?.parentNode) target.parentNode.insertBefore(errBox,target);
+      }
+      errBox.textContent = `Failed to generate report: ${e.message}`;
+      errBox.style.display = 'block';
     }
   },
 
@@ -204,7 +213,8 @@ const Reports = {
 
     document.getElementById('reportPeriodText').innerHTML = `Period: ${periodText}`;
     document.getElementById('reportGeneratedTime').textContent = `Generated: ${new Date().toLocaleString()}`;
-    document.getElementById('reportPreparedBy').textContent = currentUser?.username || 'Administrator';
+    const username = (typeof currentUser !== 'undefined' && currentUser?.username) || 'Administrator';
+    document.getElementById('reportPreparedBy').textContent = username;
     document.getElementById('reportYear').textContent = new Date().getFullYear();
   },
 
@@ -214,6 +224,8 @@ const Reports = {
 
     const from = this.currentFilterRange?.from || 'start';
     const to = this.currentFilterRange?.to || 'end';
+    const errBox = document.getElementById('reportErrorBox');
+      if (errBox) errBox.style.display = 'none';
     const filename = `Autopak_Report_${from}_to_${to}.pdf`;
 
     if (typeof html2pdf !== 'undefined') {

@@ -103,7 +103,7 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
     const sales = await db.query(sql, params);
 
     for (let sale of sales.rows) {
-        const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sale.id]);
+        const items = await db.query('SELECT * FROM sale_items WHERE "saleid" = $1', [sale.id]);
         sale.items = items.rows;
     }
     res.json(sales.rows);
