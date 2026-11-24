@@ -50,7 +50,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
                 COALESCE(SUM(CASE WHEN LOWER(p.category) LIKE '%sack%' THEN si.quantity ELSE 0 END), 0) as total_sacks_sold
             FROM sale_items si
             JOIN sales s ON si.saleid = s.id
-            LEFT JOIN products p ON si.product_id = p.id
+            LEFT JOIN products p ON si.productid = p.id
             WHERE ${itemWhere}
         `;
         const categoryResult = await db.query(categoryQuery, itemParams);
@@ -66,7 +66,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
                 SUM(si.quantity * si.price) as total_revenue
             FROM sale_items si
             JOIN sales s ON si.saleid = s.id
-            LEFT JOIN products p ON si.product_id = p.id
+            LEFT JOIN products p ON si.productid = p.id
             WHERE ${itemWhere}
             GROUP BY si.productname, p.category
             ORDER BY total_revenue DESC
