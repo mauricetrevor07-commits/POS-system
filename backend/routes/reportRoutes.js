@@ -49,8 +49,8 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
                 COALESCE(SUM(CASE WHEN LOWER(p.category) LIKE '%pipe%' THEN si.quantity ELSE 0 END), 0) as total_pipes_sold,
                 COALESCE(SUM(CASE WHEN LOWER(p.category) LIKE '%sack%' THEN si.quantity ELSE 0 END), 0) as total_sacks_sold
             FROM sale_items si
-            JOIN sales s ON si.saleid = s.id
-            LEFT JOIN products p ON si.productid = p.id
+            JOIN sales s ON si.sale_id = s.id
+            LEFT JOIN products p ON si.product_id = p.id
             WHERE ${itemWhere}
         `;
         const categoryResult = await db.query(categoryQuery, itemParams);
@@ -59,16 +59,16 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
         // 3. Products Sold Query (FIXED: snake_case)
         const productsSoldQuery = `
             SELECT 
-                si.productname as productname,
+                si.product_name as product_name,
                 COALESCE(p.category, 'General') as category,
                 SUM(si.quantity) as quantity_sold,
                 AVG(si.price) as avg_price,
                 SUM(si.quantity * si.price) as total_revenue
             FROM sale_items si
-            JOIN sales s ON si.saleid = s.id
-            LEFT JOIN products p ON si.productid = p.id
+            JOIN sales s ON si.sale_id = s.id
+            LEFT JOIN products p ON si.product_id = p.id
             WHERE ${itemWhere}
-            GROUP BY si.productname, p.category
+            GROUP BY si.product_name, p.category
             ORDER BY total_revenue DESC
         `;
         const productsSoldResult = await db.query(productsSoldQuery, itemParams);
@@ -90,7 +90,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
                 SELECT p.id, p.name, COALESCE(p.category, 'General') as category, p.price,
                        COALESCE(bs.stock, 0) as stock
                 FROM products p
-                LEFT JOIN branch_stock bs ON p.id = bs.productid AND bs.branch_id = $1
+                LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
                 ORDER BY p.name ASC
             `;
             stockParams.push(parseInt(branch_id));
@@ -99,7 +99,7 @@ router.get('/sales-summary', authMiddleware, asyncHandler(async (req, res) => {
                 SELECT p.id, p.name, COALESCE(p.category, 'General') as category, p.price,
                        COALESCE(SUM(bs.stock), p.stock, 0) as stock
                 FROM products p
-                LEFT JOIN branch_stock bs ON p.id = bs.productid
+                LEFT JOIN branch_stock bs ON p.id = bs.product_id
                 GROUP BY p.id, p.name, p.category, p.price, p.stock
                 ORDER BY p.name ASC
             `;
