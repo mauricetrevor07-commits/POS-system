@@ -145,8 +145,8 @@ function buildSidebar() {
         ${escapeHTML((currentUser.name || currentUser.username || '?')[0].toUpperCase())}
       </div>
       <div class="user-info">
-        <span class="user-name">${escapeHTML(currentUser.name || currentUser.username)}</span>
-        <span class="user-role">${isAdmin ? 'Admin' : 'Staff'} &bull; ${escapeHTML(currentBranch.name)}</span>
+        <span class="user-name">${escapeHTML(currentUser?.name || currentUser?.username || 'User')}</span>
+        <span class="user-role">${isAdmin ? 'Admin' : 'Staff'} &bull; ${escapeHTML(currentBranch?.name || 'Main Branch')}</span>
       </div>
     </li>
   `;
@@ -265,6 +265,7 @@ function handleLogout(e) {
 
 // Prevents XSS attacks by escaping user input
 function escapeHTML(str) {
+  if (str === null || str === undefined || str === '') return '';
   return str.replace(/[&<>'"]/g, 
     tag => ({
       '&': '&amp;',
