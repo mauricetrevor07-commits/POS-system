@@ -1,0 +1,57 @@
+<div class="toolbar no-print">
+    <div>
+        <h2><i class="bi bi-arrow-left-right"></i> Inter-Branch Stock Transfers</h2>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 2px;">
+            Transfer inventory between branch 1 and branch 2.
+        </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <button class="btn btn-outline btn-sm" id="btnRefreshTransfers">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <button class="btn btn-primary" id="btnNewTransfer">
+        </button>
+    </div>
+</div>
+
+<div class="no-print" style="display: grid; grid-template-columns: repeat(auto-fit, minimax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+    <span style="font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Total Transfers</span>
+    <div id="kpiTotalTransfers" style="font-size: 1.5rem; font-weight: 700; color: var(--primary); margin-top: 4px;">0</div>
+</div>
+<div class="card" style="padding: 14px 18px; margin-bottom: 0; border-color: #fed7aa;">
+    <span style="font-size: 0.75rem; font-weight: 700; color: #c2410c; text-transform: uppercase;">In Transit</span>
+    <div id="kpiPendingTransfers" style="font-size: 1.5rem; font-weight: 700; color: #ea580c; margin-top: 4px;">0</div>
+</div>
+<div class="card" style="padding:14px 18px; margin-bottom: 0; border-color: #bbf7d0;">
+    <span style="font-size: 0.75rem; font-weight: 700; color: #15803d; text-transform: uppercase;">Received</span>
+    <div id="kpiReceivedTransfers" style="font-size: 1.5rem; font-weight: 700; color: #16a34a; margin-top: 4px;">0</div>
+</div>
+<div class="card" style="padding:14px 18px; margin-bottom: 0;">
+    <span style="font-size:0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Cancelled</span>
+    <div id="kpiCancelledTransfers" style="font-size: 1.5rem; font-weight: 700; color: #94a3b8; margin-top: 4px;">0</div>
+</div>
+</div>
+
+<div class="card no-print" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 12px 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+            <input type="text" id="transferSearch" class="form-control" placeholder="Search by transfer id, item name, branch or staff..."/>
+        </div>
+        <div style="min-width: 150px;">
+            <select id="transferStatusFilter" class="form-control">
+                <option value="">All Statuses</option>
+                <option value="pending">In Transit</option>
+                <option value="received">Received</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" id="transfersListContainer" style="padding: 0; overflow-x: auto;">
+        <div style="padding:40px; text-align:center; color: var(--text-muted);">
+            <span class="spinner" style="border-color: var(--border); border-top-color:var(--primary);"></span> Loading transfers...
+        </div>
+    </div>
+</div>
