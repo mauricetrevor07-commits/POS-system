@@ -46,9 +46,13 @@ const Settings = {
             this.currentIp = data.current_ip;
             this.allowedIps = data.allowed_ips || [];
 
-            document.getElementById('currentClientIp').textContent = this.currentIp;
-            document.getElementById('ipModeAllowAll').checked = !data.enabled;
-            document.getElementById('ipModeRestrict').checked = data.enabled;
+            const ipDisplay = document.getElementById('currentClientIp');
+            if (ipDisplay) ipDisplay.textContent = this.current_Ip;
+
+            const allowAllRadio = document.getElementById('ipModeAllowAll');
+            const restrictRadio = document.getElementById('ipModeRestrict');
+            if (allowAllRadio) allowAllRadio.checked = !data.enabled;
+            if (restrictRadio) restrictRadio.checked = data.enabled;
             
             const pill = document.getElementById('ipStatusPill');
             if (data.enabled) {
