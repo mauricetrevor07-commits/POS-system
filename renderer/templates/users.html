@@ -31,22 +31,25 @@
         <td><strong class="data-name"></strong></td>
         <td class="data-username"></td>
         <td><span class="badge data-role"></span></td>
-        <td><span class="badge data-branch" style="background: #e0f2fe; color:#0369a1; font-weight: 600;"></span></td>
+        <td><span class="badge badge-neutral data-branch"></span></td>
         <td class="data-created"></td>
-        <td class="text-right" style="display: flex; gap: 6px; justify-content: flex-end;">
+        <td class="text-right"> 
+            <div style="display: flex; gap: 6px; justify-content: flex-end;">
             <button class="btn btn-sm btn-outline btn-edit"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-danger btn-delete"><i class = "bi bi-trash"></i></button>
+            </div>
         </td>
     </tr>
 </template>
 
 <template id="tpl-user-modal">
-    <div class="modal-overlay" id="userModalOverlay" style="position:fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index:9999; display: flex; align-items: center; justify-content: center;">
+    <div class="modal-overlay" id="userModalOverlay">
         <div class="modal-card" style="background: var(--bg-surface); width:90%; max-width: 480px; border-radius: 12px; box-shadow: var(--shadow-lg);">
-            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border);">
+            <div class="modal-header">
                 <h3 class="modal-title" style="margin:0;"></h3>
-                <button style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color:var(--text-muted);" id="btnCloseModal">&times;</button>
+                <button class="close-btn" id="btnCloseModal">&times;</button>
             </div>
-            <div class="modal-body" style="padding: 20px;">
+            <div class="modal-body">
                 <input type="hidden" id="userId" />
                 <div class="form-group">
                     <label class="form-label">Name</label>
@@ -79,7 +82,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border);display: flex; justify-content: flex-end; gap: 8px;">
+            <div class="modal-footer">
                 <button class="btn btn-outline" id="btnCancelModal">Cancel</button>
                 <button class="btn btn-primary" id="btnSaveUser">Save User</button>
             </div>

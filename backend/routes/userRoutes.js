@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database.js');
-const bcrypt = require('bcryptjs'); // Assuming you use bcrypt for passwords
+const bcrypt = require('bcryptjs');
 const { randomUUID } = require('crypto');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
@@ -23,7 +23,7 @@ router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
         
         if (password) {
             const hash = await bcrypt.hash(password, 10);
-            query += ', password_hash = $5 WHERE id = $6';
+            query += ', password = $5 WHERE id = $6';
             params.push(hash, id);
         } else {
             query += ' WHERE id = $5';
@@ -35,7 +35,7 @@ router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
         const hash = await bcrypt.hash(password, 10);
         const userId = randomUUID();
         await db.query(
-            'INSERT INTO users (id, name, username, password_hash, role, branch_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            'INSERT INTO users (id, name, username, password, role, branch_id) VALUES ($1, $2, $3, $4, $5, $6)',
             [userId, name, username, hash, role, branch_id || null]
         );
     }
