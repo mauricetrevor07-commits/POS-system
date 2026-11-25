@@ -1,0 +1,35 @@
+<div class="toolbar no print">
+    <h2><i class="bi bi-people"></i> Customer Management</h2>
+    <buttton class="btn btn-primary" id="btnAddCustomer">
+        <i class="bi bi-person-plus"></i> Add Customer
+    </buttton>
+</div>
+
+<div class="card no-print" style="margin-bottom: 16px;">
+    <div class="card-body" style="padding: 14px 20px; display: flex; gap: 12px; align-items: center;">
+        <div style="flex: 1;">
+            <input type="text" id="customerSearchInput" class="form-control" placeholder="Search customer by name, contact person, phone, KRA PIN or address..."/>
+        </div>
+        <span id="custCountBadge" class="badge badge-neutral">0 customers</span>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body" id="customersList" style="padding:0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Customer / Company Name</th>
+                    <th>Category / Tier</th>
+                    <th>Contact Person</th>
+                    <th>Phone</th>
+                    <th> KRA Tax PIN</th>
+                    <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="customersTableBody">
+                <tr><td colspan="6" class="text-center" style="padding:24px; color: var(--text-muted);">Loading customers...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
