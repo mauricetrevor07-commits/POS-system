@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../database.js');
-const bcrypt = require('bcrypt'); // Assuming you use bcrypt for passwords
+const bcrypt = require('bcryptjs'); // Assuming you use bcrypt for passwords
 const { randomUUID } = require('crypto');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
