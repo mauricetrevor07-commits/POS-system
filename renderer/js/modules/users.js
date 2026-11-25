@@ -3,121 +3,107 @@ const Users = {
 
   async render() {
     const container = document.getElementById('page-content');
-    container.innerHTML = `
-      <div class="toolbar">
-        <h2>User Management</h2>
-        <button class="btn btn-primary" onclick="Users.openModal()">+ Add User</button>
-      </div>
-      <div class="card">
-        <div class="card-header">All Users</div>
-        <div class="card-body">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Role</th>
-                <th>Branch</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody"><tr><td colspan="6">Loading...</td></tr></tbody>
-          </table>
-        </div>
-      </div>`;
-    await this.loadUsers();
-  },
+    container.innerHTML = '<div class="loading-spinner" style="margin:40px auto;"></div>';
 
-  async loadUsers() {
     try {
-      this.users = await DB._fetch('/api/users');
-      const tbody = document.getElementById('usersTableBody');
-      tbody.innerHTML = this.users.map(u => {
-        let bLabel = 'All Branches (Admin)';
-        if (u.branch_id === 1) bLabel = 'Branch 1 (Nairobi - KPCU)';
-        else if (u.branch_id === 2) bLabel = 'Branch 2';
-        else if (u.branch_id) bLabel = `Branch ${u.branch_id}`;
+      const response = await fetch('/templates/users.html');
+      if (!response.ok) throw new Error('Users template not found');
 
-        return `
-          <tr>
-            <td><strong>${Utils.escapeHtml(u.name || '-')}</strong></td>
-            <td>${Utils.escapeHtml(u.username)}</td>
-            <td><span class="badge badge-${u.role === 'admin' ? 'primary' : 'secondary'}">${u.role.toUpperCase()}</span></td>
-            <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;"><i class="bi bi-geo-alt"></i> ${bLabel}</span></td>
-            <td>${new Date(u.created_at).toLocaleString()}</td>
-            <td>
-              <button class="btn btn-sm btn-outline" onclick="Users.openModal('${u.id}')"><i class="bi bi-pencil"></i> Edit</button>
-              ${u.id !== (currentUser?.id || '') ? `<button class="btn btn-sm btn-danger" onclick="Users.deleteUser('${u.id}')"><i class="bi bi-trash"></i></button>` : ''}
-            </td>
-          </tr>
-        `;
-      }).join('') || '<tr><td colspan="6">No users found.</td></tr>';
-    } catch (err) {
-      Utils.toast('Failed to load users: ' + err.message, 'error');
+      container.innerHTML = await response.text();
+
+      this.attachEvents();
+      await this.loadUsers();
+    } catch (error) {
+      console.error('Failed to render Users;', error);
+      container.innerHTML = `<p style="color:var(--danger); padding:20px;">Failed to load Users: ${error.message}</p>`;
     }
   },
 
-  openModal(id = null) {
-    // Remove any existing modal
-    const existing = document.querySelector('.user-modal-overlay');
-    if (existing) existing.remove();
-
-    const user = id ? this.users.find(u => u.id === id) : null;
-    const curBranch = user?.branch_id !== undefined && user?.branch_id !== null ? String(user.branch_id) : '';
-
-    // Build the modal HTML
-    const html = `
-      <div class="user-modal-overlay" onclick="if(event.target===this) this.remove()">
-        <div class="user-modal-card" style="max-width: 480px; width: 90%;">
-          <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #e5e7eb;">
-            <h3 style="margin:0;">${user ? 'Edit User' : 'Add User'}</h3>
-            <button style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:#6b7280;" 
-                    onclick="document.querySelector('.user-modal-overlay').remove()">&times;</button>
-          </div>
-          <div class="modal-body" style="padding:20px;">
-            <input type="hidden" id="userId" value="${user ? user.id : ''}" />
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" id="userName" class="form-control" value="${Utils.escapeHtml(user?.name || '')}" placeholder="Full name">
-            </div>
-            <div class="form-group">
-              <label>Username *</label>
-              <input type="text" id="userUsername" class="form-control" value="${user?.username || ''}" placeholder="Username">
-            </div>
-            <div class="form-group">
-              <label>Password ${user ? '<small>(leave blank to keep current)</small>' : '<span style="color:red;">*</span>'}</label>
-              <input type="password" id="userPassword" class="form-control" placeholder="Password">
-            </div>
-            <div style="display:flex; gap:12px;">
-              <div class="form-group" style="flex:1;">
-                <label>Role</label>
-                <select id="userRole" class="form-control">
-                  <option value="staff" ${user?.role === 'staff' ? 'selected' : ''}>Staff (Branch Isolated)</option>
-                  <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>Administrator (Full Access)</option>
-                </select>
-              </div>
-              <div class="form-group" style="flex:1;">
-                <label>Assigned Branch *</label>
-                <select id="userBranch" class="form-control">
-                  <option value="1" ${curBranch === '1' ? 'selected' : ''}>Branch 1 (Nairobi - KPCU)</option>
-                  <option value="2" ${curBranch === '2' ? 'selected' : ''}>Branch 2</option>
-                  <option value="" ${curBranch === '' ? 'selected' : ''}>None / Head Office</option>
-                </select>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer" style="padding:12px 20px; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:8px;">
-            <button class="btn btn-outline" onclick="document.querySelector('.user-modal-overlay').remove()">Cancel</button>
-            <button class="btn btn-primary" onclick="Users.saveUser()">Save</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Append to body so it's on top of everything
-    document.body.insertAdjacentHTML('beforeend', html);
+  attachEvents() {
+    document.getElementById('btnAddUser')?.addEventListener('click', () => this.openModal());
   },
+
+  async loadUsers() {
+    const tbody = document.getElementById('usersTableBody');
+    try {
+      this.users = await DB._fetch('/api/users');
+      this.renderUsersTable();
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:20px; color:var(--danger);">Failed to load users: ${err.message}</td></tr>`;
+    }
+  },
+
+  renderUsersTable() {
+    const tbody = document.getElementById('usersTableBody');
+    const template = document.getElementById('tpl-user-row');
+    const fragment = document.createDocumentFragment();
+    tbody.innerHTML = '';
+
+    if (!this.users.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center" style="padding:20px;">No users found.</td></tr>';
+      return;
+    }
+
+    this.users.forEach (u => {
+      const clone = template.content.cloneNode(true);
+
+      clone.querySelector('.data-name').textContent = u.name || '-';
+      clone.querySelector('.data-username').textContent = u.username;
+
+      const roleBadge = clone.querySelector('.data-role');
+      roleBadge.textContent = u.role.toUpperCase();
+      roleBadge.className = `badge data-role ${u.role === 'admin' ? 'badge-primary' : 'badge-secondary'}`;
+
+      const branchBadge = clone.querySelector('.data-branch');
+      let bLabel = 'All Branches (admin)';
+      if (u.branch_id === 1) bLabel = 'Branch 1';
+      else if (u.branch_id === 2) bLabel = 'Branch 2';
+      else if (u.branch_id) bLabel = `Branch ${u.branch_id}`;
+      branchBadge.innerHTML = `<i class="bi bi-geo-alt"></i> ${bLabel}`;
+
+      clone.querySelector('.data-created').textContent = new Date(u.created_at).toLocaleString();
+
+      clone.querySelector('.btn-edit').addEventListener('click', () => this.openModal(u.id));
+
+      const currentUserId = currentUser?.id || localStorage.getItem('userId');
+      if (u.id !== currentUserId) {
+        clone.querySelector('.btn-delete').addEventListener('click', () => this.deleteUser(u.id));
+      } else {
+        clone.querySelector('.btn-delete').remove();
+      }
+
+      fragment.appendChild(clone);
+    });
+    tbody.appendChild(fragment);
+  },
+
+  openModal(id = null) {
+    const user = id ? this.users.find(u => u.id === id) : null;
+    const template = document.getElementById('tpl-user-modal');
+    const clone = template.content.cloneNode(true);
+   
+    clone.querySelector('.modal-title').textContent = user ? 'Edit User' : 'Add User';
+    clone.querySelector('#passwordLabel').innerHTML = user ? 'password <small>(leave blank to keep current)</small>' : 'password <span style="color:red;">*</span>';
+
+    if (user) {
+      clone.querySelector('#userId').value = user.id;
+      clone.querySelector('#userName').value = user.name || '';
+      clone.querySelector('#userUsername').value = user.username || '';
+      clone.querySelector('#userRole').value = user.role || 'staff';
+      clone.querySelector('#userBranch').value = user.branch_id ? String(user.branch_id) : '';
+    }
+
+    document.body.appendChild(clone);
+
+    document.getElementById('btnCloseModal').addEventListener('click', () => this.closeModal());
+    document.getElementById('btnCancelModal').addEventListener('click', () => this.closeModal());
+    document.getElementById('btnSaveUser').addEventListener('click', () => this.saveUser());
+    },
+
+    closeModal() {
+      const overlay = document.getElementById('userModalOverlay');
+      if (overlay) overlay.remove();
+    },
 
   async saveUser() {
     const id = document.getElementById('userId').value;
@@ -130,18 +116,22 @@ const Users = {
     if (!username) return Utils.toast('Username is required', 'warning');
     if (!id && !password) return Utils.toast('Password is required for new users', 'warning');
 
+    const btn = document.getElementById('btnSaveUser');
+    btn.innerHTML = '<span class="spinner"></span> Saving...';
+    btn.disabled = true;
+
     try {
       await DB._fetch('/api/users', {
         method: 'POST',
         body: JSON.stringify({ id, name, username, password, role, branch_id })
       });
-      // Close the modal
-      const overlay = document.querySelector('.user-modal-overlay');
-      if (overlay) overlay.remove();
-      Utils.toast('User saved successfully', 'success');
+      this.closeModal();
+      Utils.toast('User saved successfully', 'success')
       this.loadUsers();
     } catch (err) {
-      Utils.toast(err.message, 'error');
+      Utils.toast(err.message, 'danger');
+      btn.innerHTML = 'Save User';
+      btn.disabled = false;
     }
   },
 
@@ -152,7 +142,9 @@ const Users = {
       Utils.toast('User deleted', 'success');
       this.loadUsers();
     } catch (err) {
-      Utils.toast(err.message, 'error');
+      Utils.toast(err.message, 'danger');
     }
   }
 };
+
+window.Users = Users;

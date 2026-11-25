@@ -1,0 +1,88 @@
+<div class="toolbar">
+    <h2><i class="bi bi-people-fill"></i> User Management</h2>
+    <button class="btn btn-primary" id="btnAddUser">
+        <i class="bi bi-person-plus=fill"></i> Add User
+    </button>
+</div>
+
+<div class="card">
+    <div class="card-header">All Users</div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                <th>Name</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Branch</th>
+                <th>Created</th>
+                <th class="text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="usersTableBody">
+                <tr><td colspan="6" class="text-center" style="padding: 20px;">Loading users...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<template id="tpl-user-row">
+    <tr>
+        <td><strong class="data-name"></strong></td>
+        <td class="data-username"></td>
+        <td><span class="badge data-role"></span></td>
+        <td><span class="badge data-branch" style="background: #e0f2fe; color:#0369a1; font-weight: 600;"></span></td>
+        <td class="data-created"></td>
+        <td class="text-right" style="display: flex; gap: 6px; justify-content: flex-end;">
+            <button class="btn btn-sm btn-outline btn-edit"><i class="bi bi-pencil"></i></button>
+        </td>
+    </tr>
+</template>
+
+<template id="tpl-user-modal">
+    <div class="modal-overlay" id="userModalOverlay" style="position:fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.5); z-index:9999; display: flex; align-items: center; justify-content: center;">
+        <div class="modal-card" style="background: var(--bg-surface); width:90%; max-width: 480px; border-radius: 12px; box-shadow: var(--shadow-lg);">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border);">
+                <h3 class="modal-title" style="margin:0;"></h3>
+                <button style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color:var(--text-muted);" id="btnCloseModal">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <input type="hidden" id="userId" />
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" id="userName" class="form-control" placeholder="Full name">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Username *</label>
+                    <input type="text" id="userUsername" class="form-control" placeholder="Username">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" id="passwordLabel">Password *</label>
+                    <input type="password" id="userPassword" class="form-control" placeholder="Password">
+                </div>
+                <div style="display: flex; gap: 12px;">
+                    <div class="form-group" style="flex:1;">
+                        <label class="form-label">Role</label>
+                        <select id="userRole" class="form-control">
+                            <option value="staff">Staff (Branch Isolated)</option>
+                            <option value="admin">Administrator (Full Access)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="flex:1">
+                        <label class="form-label">Assigned Branch *</label>
+                        <select id="userBranch" class="form-control">
+                            <option value="1">Branch 1</option>
+                            <option value="2">Branch 2</option>
+                            <option value="">None / Head Office</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border);display: flex; justify-content: flex-end; gap: 8px;">
+                <button class="btn btn-outline" id="btnCancelModal">Cancel</button>
+                <button class="btn btn-primary" id="btnSaveUser">Save User</button>
+            </div>
+        </div>
+    </div>
+</template>

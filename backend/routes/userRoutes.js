@@ -1,57 +1,51 @@
 const express = require('express');
 const router = express.Router();
-const { randomUUID } = require('crypto');
-const bcrypt = require('bcryptjs');
 const db = require('../database.js');
+const bcrypt = require('bcrypt'); // Assuming you use bcrypt for passwords
+const { randomUUID } = require('crypto');
 const { authMiddleware, adminOnly } = require('../middleware/auth');
 const { asyncHandler } = require('../middleware/errorHandler');
 
-// GET /api/users (Admin Only)
+// GET all users
 router.get('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
-  const result = await db.query('SELECT id, username, role, name, branch_id, created_at FROM users ORDER BY created_at DESC');
-  res.json(result.rows);
+    const result = await db.query('SELECT id, name, username, role, branch_id, created_at FROM users ORDER BY created_at DESC');
+    res.json(result.rows);
 }));
 
-// POST /api/users (Admin Only - Create or Update)
+// POST create or update user
 router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
-  const { id, username, password, role, name, branch_id } = req.body;
-  if (!username || !role) return res.status(400).json({ error: 'Missing required fields' });
-  
-  if (id) {
-    // Update existing user
-    const fields = [];
-    const vals = [];
-    let idx = 1;
-    fields.push(`username=$${idx++}`); vals.push(username);
-    fields.push(`role=$${idx++}`); vals.push(role);
-    if (name !== undefined) { fields.push(`name=$${idx++}`); vals.push(name); }
-    if (branch_id !== undefined) { fields.push(`branch_id=$${idx++}`); vals.push(branch_id ? parseInt(branch_id) : null); }
+    const { id, name, username, password, role, branch_id } = req.body;
     
-    if (password) {
-      const hash = bcrypt.hashSync(password, 10);
-      fields.push(`password=$${idx++}`); vals.push(hash);
+    if (id) {
+        // Update
+        let query = 'UPDATE users SET name = $1, username = $2, role = $3, branch_id = $4';
+        let params = [name, username, role, branch_id || null];
+        
+        if (password) {
+            const hash = await bcrypt.hash(password, 10);
+            query += ', password_hash = $5 WHERE id = $6';
+            params.push(hash, id);
+        } else {
+            query += ' WHERE id = $5';
+            params.push(id);
+        }
+        await db.query(query, params);
+    } else {
+        // Create
+        const hash = await bcrypt.hash(password, 10);
+        const userId = randomUUID();
+        await db.query(
+            'INSERT INTO users (id, name, username, password_hash, role, branch_id) VALUES ($1, $2, $3, $4, $5, $6)',
+            [userId, name, username, hash, role, branch_id || null]
+        );
     }
-    
-    vals.push(id);
-    const setClause = fields.join(',');
-    await db.query(`UPDATE users SET ${setClause} WHERE id=$${idx}`, vals);
-  } else {
-    // Create new user
-    if (!password) return res.status(400).json({ error: 'Password is required for new users' });
-    const newId = randomUUID();
-    const hash = bcrypt.hashSync(password, 10);
-    await db.query(
-      'INSERT INTO users (id, username, password, role, name, branch_id) VALUES ($1,$2,$3,$4,$5,$6)',
-      [newId, username, hash, role, name || null, branch_id ? parseInt(branch_id) : null]
-    );
-  }
-  res.json({ success: true });
+    res.json({ success: true });
 }));
 
-// DELETE /api/users/:id (Admin Only)
+// DELETE user
 router.delete('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
-  await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
-  res.json({ success: true });
+    await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
 }));
 
 module.exports = router;
