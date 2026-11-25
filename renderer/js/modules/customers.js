@@ -1,5 +1,3 @@
-const { title } = require("node:process");
-
 const Customers = {
   allCustomers: [],
 
