@@ -54,7 +54,7 @@
 
 .btn-danger {
   background-color: var(--danger);
-  color: #ffffff;
+  color: #f00505;
 }
 .btn-danger:hover:not(:disabled) {
   background-color: #991b1b; /* Darker red */
