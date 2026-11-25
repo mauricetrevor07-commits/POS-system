@@ -15,7 +15,7 @@
 @import url('components/_toasts.css');
 
 /*utilities and layouts */
-.flex-row { display: flex; align-items: center; gap:12px; flex-wrap: wrap}
+.flex-row { display: flex; align-items: center; gap:12px; flex-wrap: wrap; }
 .flex-col { display: flex; flex-direction: column; gap: 16px; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;}
 
@@ -24,6 +24,7 @@
 
 .text-muted { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 16px;}
 .text-danger { color: var(--danger); }
+.text-primary { color: var(--primary); }
 .text-success { color:var(--success); }
 
 .table-responsive {
