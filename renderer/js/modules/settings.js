@@ -1,6 +1,6 @@
 const Settings = {
     allowedIpsList: [],
-    detectedClientIp: '',
+    currentIp:'',
 
     async render() {
         const container = document.getElementById('page-content');
@@ -9,23 +9,23 @@ const Settings = {
         try {
             const response = await fetch('/templates/settings.html');
             if (!response.ok) throw new Error('Settings template not found');
+
             container.innerHTML = await response.text();
 
             this.attachEvents();
-            this.renderCategoryRows(); // Build the static category rows
-            await this.loadData();
+            await this.loadIpSettings();
 
         } catch (error) {
             console.error('Failed to render settings:', error);
-            container.innerHTML = `<p style="color:var(--danger); padding:20px;">Failed to load settings: ${error.message}</p>`;
+            container.innerHTML = `<p style="color:red; padding:20px;">Failed to load settings: ${error.message}</p>`;
         }
     },
 
     attachEvents() {
         // IP Security Events
         document.getElementById('btnAddCurrentIp')?.addEventListener('click', () => this.addCurrentIp());
-        document.getElementById('btnAddIp')?.addEventListener('click', () => this.addIpToList());
-        document.getElementById('btnSaveIpSettings')?.addEventListener('click', () => this.saveIpSecuritySettings());
+        document.getElementById('btnAddIp')?.addEventListener('click', () => this.addIpManual());
+        document.getElementById('btnSaveIpSettings')?.addEventListener('click', () => this.saveSettings());
         
         // WhatsApp Events
         document.getElementById('btnSaveWhatsApp')?.addEventListener('click', () => this.saveWhatsApp());
@@ -37,178 +37,133 @@ const Settings = {
         });
     },
 
-    async loadData() {
-        try {
-            await Promise.all([this.loadGeneralSettings(), this.loadIpSecurity()]);
-        } catch (e) {
-            Utils.toast('Failed to load some settings', 'error');
-        }
-    },
 
     // --- IP SECURITY ---
-    async loadIpSecurity() {
+    async loadIpSettings() {
         try {
             const data = await DB._fetch('/api/settings/ip-security');
-            this.detectedClientIp = data.client_ip || '';
-            this.allowedIpsList = data.allowed_ips || [];
 
-            const clientIpEl = document.getElementById('currentClientIp');
-            if (clientIpEl) clientIpEl.textContent = this.detectedClientIp || 'Unknown';
+            this.currentIp = data.current_ip;
+            this.allowedIps = data.allowed_ips || [];
 
-            const enabled = !!data.enabled;
-            const ipPill = document.getElementById('ipStatusPill');
+            document.getElementById('currentClientIp').textContent = this.currentIp;
+            document.getElementById('ipModeAllowAll').checked = !data.enabled;
+            document.getElementById('ipModeRestrict').checked = data.enabled;
             
-            document.getElementById('ipModeAllowAll').checked = !enabled;
-            document.getElementById('ipModeRestrict').checked = enabled;
-            
-            if (ipPill) {
-                ipPill.className = enabled ? 'badge badge-warning' : 'badge badge-success';
-                ipPill.innerHTML = enabled ? '<i class="bi bi-shield-lock"></i> Restricted' : '<i class="bi bi-globe"></i> Allow All';
+            const pill = document.getElementById('ipStatusPill');
+            if (data.enabled) {
+                pill.textContent = 'Restricted mode active';
+                pill.className = 'badge badge-danger';
+            } else {
+                pill.textContent = 'Allow all mode';
+                pill.className = 'badge badge-success';
             }
 
-            this.renderAllowedIpsTable();
+            this.renderIpList();
         } catch (e) {
-            console.error('Failed to load IP security settings', e);
+            console.error('Failed to load IP settings: ' + e.message, 'danger');
         }
     },
 
-    renderAllowedIpsTable() {
+    renderIpList() {
         const tbody = document.getElementById('allowedIpsTableBody');
         if (!tbody) return;
 
-        if (!this.allowedIpsList.length) {
-            tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="padding:20px; color:#64748b;">No specific IP addresses added yet.</td></tr>';
+        if (!this.allowedIps.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No IPs whitelisted yet. Anyone can access if mode is allow all.</td></tr>';
             return;
         }
 
-        const template = document.getElementById('tpl-ip-row');
-        const fragment = document.createDocumentFragment();
-        tbody.innerHTML = '';
+        tbody.innerHTML = this.allowedIps.map((item, index) => `
+        <tr>
+        <td><strong>${Utils.escapeHtml(item.label || 'Unknown')}</strong></td>
+        <td><code>${Utils.escapeHtml(item.ip)}</code></td>
+        <td>${new Date(item.added_at).toLocaleString()}</td>
+        <td class="text-right">
+        <button class="btn btn-sm btn-danger" data-remove="${index}"><i class="bi bi-trash"></i></button>
+        </td>
+        <tr>
+        `).join('');
 
-        this.allowedIpsList.forEach((entry, idx) => {
-            const clone = template.content.cloneNode(true);
-            clone.querySelector('.data-label').textContent = entry.label || 'Branch Location';
-            clone.querySelector('.data-ip').textContent = entry.ip;
-            clone.querySelector('.data-date').textContent = entry.added_at ? new Date(entry.added_at).toLocaleDateString() : '-';
-            clone.querySelector('.btn-remove-ip').addEventListener('click', () => this.removeIpFromList(idx));
-            fragment.appendChild(clone);
+        tbody.querySelectorAll('button[data-remove]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(e.target.closest('button').dataset.remove);
+                this.allowedIps.splice(idx, 1);
+                this.renderIpList();
+            });
         });
-
-        tbody.appendChild(fragment);
     },
 
     addCurrentIp() {
-        if (!this.detectedClientIp) return Utils.toast('Current IP could not be detected', 'warning');
-        document.getElementById('newIpAddress').value = this.detectedClientIp;
-        document.getElementById('newIpLabel').value = 'Current Location';
+        if (!this.allowedIps.some(i => i.ip === this.currentIp)) {
+
+        return Utils.toast('Your current Ip is already whitelisted', 'warning');
+        }
+
+        this.allowedIps.push({
+            ip: this.currentIp,
+            label: 'My Current Device',
+            added_at: new Date().toISOString()
+        });
+        this.renderIpList();
+        Utils.toast('IP added to list. Click save to apply.', 'info');
     },
 
-    addIpToList() {
-        const ip = document.getElementById('newIpAddress')?.value.trim();
-        const label = document.getElementById('newIpLabel')?.value.trim() || 'Branch Office';
+    addIpManual() {
+        const ipInput = document.getElementById('newIpAddress');
+        const labelInput = document.getElementById('newIpLabel');
+
+        const ip = ipInput.value.trim();
+        const label = labelInput.value.trim() || 'Custom Location';
 
         if (!ip) return Utils.toast('Please enter a valid IP address', 'warning');
-        if (this.allowedIpsList.some(e => e.ip === ip)) return Utils.toast('This IP is already whitelisted', 'warning');
+        if (this.allowedIpsList.some(i => i.ip === ip)) return Utils.toast('This IP is already whitelisted', 'warning');
 
-        this.allowedIpsList.push({ ip, label, added_at: new Date().toISOString() });
-        document.getElementById('newIpAddress').value = '';
-        document.getElementById('newIpLabel').value = '';
-        
-        this.renderAllowedIpsTable();
-        Utils.toast(`Added ${ip} to list. Click Save to apply.`, 'info');
+        this.allowedIpsList.push({
+            ip: ip,
+            label: label,
+            added_at: new Date().toISOString()
+         });
+
+         ipInput.value = '';
+         labelInput.value= '';
+         this.renderIpList();
+         Utils.toast('IP added to list. Click save to apply.', 'info');
     },
 
-    removeIpFromList(index) {
-        this.allowedIpsList.splice(index, 1);
-        this.renderAllowedIpsTable();
-    },
+    async saveSettings() {
+        const isRestricted = document.getElementById('ipModeRestrict').checked;
+        const btn = document.getElementById('btnSaveIpSettings');
 
-    async saveIpSecuritySettings() {
-        const enabled = document.getElementById('ipModeRestrict')?.checked || false;
+        btn.innerHTML = '<span class="spinner"></span> Saving...';
+        btn.disabled = true;
+
         try {
             await DB._fetch('/api/settings/ip-security', {
                 method: 'POST',
-                body: JSON.stringify({ enabled, allowed_ips: this.allowedIpsList })
+                body: JSON.stringify({
+                    enabled: isRestricted,
+                    allowed_ips: this.allowedIps
+                 })
             });
             Utils.toast('IP security settings saved', 'success');
-            this.loadIpSecurity();
-        } catch (e) {
-            Utils.toast(e.message, 'danger');
-        }
-    },
 
-    // --- GENERAL SETTINGS & WHATSAPP ---
-    async loadGeneralSettings() {
-        const settings = await DB._fetch('/api/settings');
-        const input = document.getElementById('settingsWhatsApp');
-        if (settings.admin_whatsapp_number && input) {
-            input.value = settings.admin_whatsapp_number;
-        }
-    },
-
-    async saveWhatsApp() {
-        const value = document.getElementById('settingsWhatsApp').value.trim();
-        if (!value) return Utils.toast('Please enter a WhatsApp number', 'warning');
-        if (!/^\+\d{7,15}$/.test(value)) return Utils.toast('Enter a valid number with country code', 'warning');
-
-        try {
-            await DB._fetch('/api/settings', {
-                method: 'POST',
-                body: JSON.stringify({ key: 'admin_whatsapp_number', value })
-            });
-            Utils.toast('WhatsApp number updated', 'success');
-        } catch (e) {
-            Utils.toast(e.message, 'danger');
-        }
-    },
-
-    // --- CATEGORY PRICING ---
-    renderCategoryRows() {
-        const container = document.getElementById('categoryPricingList');
-        if (!container) return;
-
-        const categories = [
-            { key: 'hdpe_pipes', name: 'HDPE Pipes' },
-            { key: 'heavy_duty_sacks', name: 'Heavy Duty Sacks' },
-            { key: 'fittings_accessories', name: 'Fittings & Accessories' },
-            { key: 'general', name: 'General' }
-        ];
-
-        const template = document.getElementById('tpl-category-row');
-        const fragment = document.createDocumentFragment();
-
-        categories.forEach(cat => {
-            const clone = template.content.cloneNode(true);
-            clone.querySelector('.data-cat-name').textContent = cat.name;
+            const pill = document.getElementById('ipStatusPill');
+            if (isRestricted) {
+                pill.textContent = 'Restricted Mode Active';
+                pill.className = 'badge badge-danger';
+            } else {
+                pill.textContent = 'Allow All Mode';
+                pill.className = 'badge badge-success';
+            }
             
-            const wsInput = clone.querySelector('.ws-input');
-            const distInput = clone.querySelector('.dist-input');
-            wsInput.id = `ws_pct_${cat.key}`;
-            distInput.id = `dist_pct_${cat.key}`;
-
-            clone.querySelector('.btn-apply-cat').addEventListener('click', () => this.applyCategoryPricing(cat.name, cat.key));
-            
-            fragment.appendChild(clone);
-        });
-
-        container.innerHTML = '';
-        container.appendChild(fragment);
-    },
-
-    async applyCategoryPricing(categoryName, catKey) {
-        const wsPct = parseFloat(document.getElementById(`ws_pct_${catKey}`)?.value) || 0;
-        const distPct = parseFloat(document.getElementById(`dist_pct_${catKey}`)?.value) || 0;
-
-        try {
-            const res = await DB._fetch('/api/settings/apply-category-pricing', {
-                method: 'POST',
-                body: JSON.stringify({ category: categoryName, wholesale_discount_pct: wsPct, distributor_discount_pct: distPct })
-            });
-            Utils.toast(`Applied discounts to ${res.updatedProductsCount} products`, 'success');
         } catch (e) {
             Utils.toast(e.message, 'danger');
+        } finally {
+            btn.innerHTML = '<i class="bi bi-shield-check"></i> Save IP Security settings';
+            btn.disabled = false;
         }
-    }
+    },
 };
 
 window.Settings = Settings;
