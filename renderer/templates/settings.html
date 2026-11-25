@@ -2,54 +2,45 @@
     <h2><i class="bi bi-gear"></i> System Settings</h2>
 </div>
 
-<div style="display:flex; flex-direction:column; gap:24px; max-width: 800px;">
+<div class="flex-col" style="max-width: 800px;">
     
     <!-- Branch Location & IP Security Card -->
     <div class="card">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="card-header flex-between">
             <span><i class="bi bi-shield-lock-fill"></i> Branch Location & IP Security</span>
             <span id="ipStatusPill" class="badge badge-secondary">Loading...</span>
         </div>
-        <div class="card-body" style="padding: 24px;">
-            <p style="color: #64748b; margin-bottom: 16px; font-size: 0.9rem;">
+        <div class="card-body p-24">
+            <p class="text-muted">
                 Control where staff can log in to the POS system. You can allow all IP addresses or restrict access exclusively to authorized branch location internet connections.
             </p>
 
             <!-- Restriction Mode Selection -->
-            <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:16px; margin-bottom:20px;">
-                <label style="font-weight:700; color:#1e293b; display:block; margin-bottom:10px;">Access Policy</label>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.95rem;">
+            <div class="card-inner" style="margin-bottom: 20px;">
+                <label style="font-weight:700; color:var(--text-main); display:block; margin-bottom:10px;">Access Policy</label>
+                <div class="flex-col" style="gap: 10px;">
+                    <label class="flex-row" style="cursor: pointer; font-size: 0.95rem;">
                         <input type="radio" name="ipAccessMode" value="false" id="ipModeAllowAll" />
-                        <span><strong>Allow All IP Addresses</strong> <span style="color:#64748b; font-size:0.85rem;">(Accessible from any location)</span></span>
+                        <span><strong>Allow All IP Addresses</strong> <span class="text-muted">(Accessible from any location)</span></span>
                     </label>
-                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.95rem;">
+                    <label class="flex-row" style="cursor: pointer; font-size: 0.95rem;">
                         <input type="radio" name="ipAccessMode" value="true" id="ipModeRestrict" />
-                        <span><strong style="color:#dc2626;">Restrict to Branch Locations</strong> <span style="color:#64748b; font-size:0.85rem;">(Staff can ONLY log in from whitelisted IPs)</span></span>
+                        <span><strong class="text-danger">Restrict to Branch Locations</strong> <span class="text-muted">(Staff can ONLY log in from whitelisted IPs)</span></span>
                     </label>
                 </div>
             </div>
 
             <!-- Current IP and Add Section -->
             <div id="ipWhitelistSection">
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#e0f2fe; border:1px solid #bae6fd; border-radius:8px; padding:12px 16px; margin-bottom:16px;">
-                    <div>
-                        <span style="font-size:0.8rem; color:#0369a1; font-weight:600; text-transform:uppercase;">Your Current Connection IP</span>
-                        <div style="font-size:1.1rem; font-weight:700; color:#0c4a6e;" id="currentClientIp">Detecting...</div>
-                    </div>
-                    <button class="btn btn-sm btn-outline" id="btnAddCurrentIp" style="background:#fff;">
-                        <i class="bi bi-plus-circle"></i> Add My IP to Whitelist
-                    </button>
-                </div>
-
+                
                 <!-- Add IP Form -->
-                <div style="display:flex; gap:12px; margin-bottom:16px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="flex-row" style="margin-bottom: 16px; align-items: flex-end;">
                     <div style="flex:2; min-width:180px;">
-                        <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">IP Address or Subnet *</label>
+                        <label class="form-label">IP Address or Subnet *</label>
                         <input id="newIpAddress" class="form-control" placeholder="e.g. 197.232.10.45" />
                     </div>
                     <div style="flex:2; min-width:180px;">
-                        <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">Branch / Location Label</label>
+                        <label class="form-label">Branch / Location Label</label>
                         <input id="newIpLabel" class="form-control" placeholder="e.g. Nairobi Branch - Main Router" />
                     </div>
                     <div>
@@ -58,7 +49,7 @@
                 </div>
 
                 <!-- Whitelisted IPs Table -->
-                <div style="border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+                <div class="table-responsive" style="margin-bottom: 20px;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -69,7 +60,7 @@
                             </tr>
                         </thead>
                         <tbody id="allowedIpsTableBody">
-                            <tr><td colspan="4" class="text-center" style="padding:20px; color:#64748b;">Loading allowed IPs...</td></tr>
+                            <tr><td colspan="4" class="text-center" style="padding:20px; color:var(--text-muted);">Loading allowed IPs...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -84,37 +75,22 @@
     <!-- WhatsApp Notification Card -->
     <div class="card">
         <div class="card-header"><i class="bi bi-whatsapp"></i> WhatsApp Notifications</div>
-        <div class="card-body" style="padding: 24px;">
-            <p style="color: #64748b; margin-bottom: 16px; font-size: 0.9rem;">
+        <div class="card-body p-24">
+            <p class="text-muted">
                 When a cashier submits a sale, the payment reference and order details will be sent to this WhatsApp number for admin approval.
             </p>
             <div class="form-group" style="margin-bottom: 16px;">
-                <label style="font-weight: 600; margin-bottom: 6px; display: block;">Admin WhatsApp Number</label>
-                <input id="settingsWhatsApp" class="form-control" placeholder="+254700000000" style="padding: 10px 14px; font-size: 1rem; border-radius: 8px; border: 1px solid #cbd5e1;" />
-                <small style="color: #94a3b8; display: block; margin-top: 6px;">Include country code, e.g. +254 for Kenya</small>
+                <label class="form-label">Admin WhatsApp Number</label>
+                <input id="settingsWhatsApp" class="form-control" placeholder="+254700000000"/>
+                <small class="text-muted" style="display: block; margin-top: 6px;">Include country code, e.g. +254 for Kenya</small>
             </div>
             <button class="btn btn-primary" id="btnSaveWhatsApp" style="padding: 10px 24px;">
                 <i class="bi bi-check-lg"></i> Save WhatsApp Number
             </button>
         </div>
     </div>
-
-    <!-- Category Tier Pricing Settings -->
-    <div class="card">
-        <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-            <span><i class="bi bi-tags-fill"></i> Category Tier Pricing & Bulk Discounts</span>
-            <button class="btn btn-sm btn-primary" id="btnOpenMatrix">
-                <i class="bi bi-grid-3x3"></i> Open Full Matrix
-            </button>
-        </div>
-        <div class="card-body" style="padding: 24px;">
-            <p style="color: #64748b; margin-bottom: 20px; font-size: 0.9rem;">
-                Set automatic percentage discounts for <strong>Wholesale</strong> and <strong>Distributor</strong> tiers per category.
-            </p>
-            <div id="categoryPricingList" style="display:flex; flex-direction:column; gap:16px;"></div>
-        </div>
-    </div>
 </div>
+
 
 <!-- TEMPLATES -->
 <template id="tpl-ip-row">
@@ -129,18 +105,18 @@
 </template>
 
 <template id="tpl-category-row">
-    <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px 16px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+    <div class="card-inner flex-between">
+        <div style="min-width: 180px;">
             <div style="min-width:180px;">
-                <strong class="data-cat-name" style="font-size:0.95rem; color:#1e293b;"></strong>
-                <div style="font-size:0.75rem; color:#64748b;">Pricing Tier Rules</div>
+                <strong class="data-cat-name" style="font-size:0.95rem; color:var(--text-main);"></strong>
+                <div class="text-muted" style="font-size:0.75rem; margin-top: 2px;">Pricing Tier Rules</div>
             </div>
-            <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                <div style="display:flex; align-items:center; gap:6px;">
+            <div class="flex-row">
+                <div class="flex-row">
                     <label style="font-size:0.8rem; font-weight:600; color:#0284c7;">Wholesale Disc %:</label>
                     <input type="number" step="0.5" min="0" max="100" class="form-control ws-input" style="width:80px; text-align:center;" placeholder="10" />
                 </div>
-                <div style="display:flex; align-items:center; gap:6px;">
+                <div class="flex-row">
                     <label style="font-size:0.8rem; font-weight:600; color:#7c3aed;">Distributor Disc %:</label>
                     <input type="number" step="0.5" min="0" max="100" class="form-control dist-input" style="width:80px; text-align:center;" placeholder="15" />
                 </div>

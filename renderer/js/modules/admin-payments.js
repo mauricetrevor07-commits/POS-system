@@ -20,6 +20,11 @@ const AdminPayments = {
       
       container.innerHTML = await response.text();
 
+      document.getElementById('btnRefreshPayments')?.addEventListener('click', () => this.refresh());
+      document.getElementById('tabPendingBtn')?.addEventListener('click', () => this.switchTab('pending'));
+      document.getElementById('tabCreditBtn')?.addEventListener('click', () => this.switchTab('credit'));
+
+
       // Apply the correct tab styling and render the active tab content
       this.switchTab(this.activeTab);
 
@@ -317,11 +322,15 @@ const AdminPayments = {
       title: '<i class="bi bi-cash-coin" style="color:#16a34a;"></i> Settle Credit Payment',
       content,
       footer: `
-        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
+        <button class="btn btn-outline" id="btnCancelSettle">Cancel</button>
         <button class="btn btn-success" id="confirmSettleCreditBtn"><i class="bi bi-check-circle"></i> Confirm Full Payment</button>
       `
     });
 
+    document.getElementById('btnCancelSettle')?.addEventListener('click', () =>
+  {
+    document.querySelector('.modal-overlay')?.remove();
+  });
     document.getElementById('confirmSettleCreditBtn')?.addEventListener('click', async () => {
       const ref = document.getElementById('settlePaymentRef')?.value.trim();
       if (!ref) return Utils.toast('Payment Reference is required to settle credit', 'warning');

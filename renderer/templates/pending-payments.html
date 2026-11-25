@@ -1,50 +1,52 @@
 <div class="toolbar no-print">
     <h2><i class="bi bi-shield-check"></i>Payment Approvals & Credit Alerts</h2>
-    <div style="display: flex; gap: 8px;">
-        <button class="btn btn-outline btn-sm" onclick="AdminPayments.refresh()">
+    <div class="flex-row">
+        <button class="btn btn-outline btn-sm" id="btnRefreshPayments">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
     </div>
 </div>
 
 <div id="creditAlertBanner" style="display: none; margin-bottom: 16px;"></div>
-<div class="no-print" style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-    <button id="tabPendingBtn" class="btn ${this.activeTab === 'pending' ? 'btn-primary' : 'btn-outline'}" onclick="adminPayments.switchTab('pending')">
-        <i class="bi bi-hourglass-split"></i> Pending Payment Approvals
+<div class="no-print flex-row" style="margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+    <button id="tabPendingBtn" class="btn btn-primary">
+        <i class="bi bi-hourglass-split"></i> Pending Approvals
         <span id="pendingCountBadge" class="badge badge-warning" style="margin-left:6px;">0</span>
     </button>
-    <button id="tabCreditBtn" class="btn ${this.activeTab === 'credit' ? 'btn-primary' : 'btn-outline'}" onclick="AdminPayments.switchTab('credit')">
-        <i class="bi bi-exclamation-triangle"></i> Credit Sales Due Alerts
+    <button id="tabCreditBtn" class="btn btn-outline">
+        <i class="bi bi-exclamation-triangle"></i> Credit Alerts
         <span id="creditOverdueBadge" class="badge badge-danger" style="margin-left: 6px; display: none;">0</span>
     </button>
 </div>
 
 <div id="adminPaymentsTabContent">
-    <div class="loading-spinner"></div>
+    <div style="padding: 40px; text-align: center; color: var(--text-muted);">
+        <span class="spinner" style="border-color: var(--border); border-top-color:var(--primary);"></span> Loading...
+    </div>
 </div>
 
 <template id="tpl-pending-row">
-    <div style="padding:18px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+    <div class="flex-between" style="padding:18px 20px; border-bottom:1px solid var(--border);">
         <div style="flex:2; min-width:280px;">
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                <strong class="data-sale-id" style="font-size:1.1rem; color:#0f172a;"></strong>
+            <div class="flex-row" style="margin-bottom:6px;">
+                <strong class="data-sale-id" style="font-size:1.1rem; color:var(--text-main);"></strong>
                 <span class="badge badge-warning">Awaiting Approval</span>
-                <span class="badge badge-secondary data-branch"></span>
-                <span class="data-time" style="font-size:0.8rem; color:#64748b;"></span>
+                <span class="badge badge-neutral data-branch"></span>
+                <span class="data-time text-muted" style="font-size:0.8rem;"></span>
             </div>
-            <div style="font-size:0.95rem; color:#1e293b; margin-bottom:4px;">
+            <div style="font-size:0.95rem; color:var(--text-main); margin-bottom:4px;">
                 <strong>Customer:</strong> <span class="data-customer"></span>
             </div>
-            <div style="font-size:0.85rem; color:#64748b; margin-bottom:4px;">
+            <div class="text-muted" style="font-size:0.85rem;margin-bottom:4px;">
                 <strong>Items:</strong> <span class="data-items"></span>
             </div>
-            <div style="font-size:0.85rem; color:#475569; background:#f1f5f9; padding:4px 8px; border-radius:6px; display:inline-block;">
+            <div style="font-size:0.85rem; color:var(--text-main); background:var(--bg-body); padding:4px 8px; border-radius:6px; display:inline-block;">
                 <strong>Payment:</strong> <span class="data-method"></span> | Ref: <strong class="data-ref"></strong>
             </div>
         </div>
         <div style="text-align:right; min-width:200px;">
-            <div class="data-total" style="font-size:1.4rem; font-weight:700; color:var(--primary); margin-bottom:10px;"></div>
-            <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <div class="data-total text-primary" style="font-size:1.4rem; font-weight:700; margin-bottom:10px;"></div>
+            <div class="flex-row" style="justify-content:flex-end;">
                 <button class="btn btn-sm btn-outline btn-print" title="Print Preview"><i class="bi bi-printer"></i> Docs</button>
                 <button class="btn btn-sm btn-success btn-approve"><i class="bi bi-check-lg"></i> Approve</button>
                 <button class="btn btn-sm btn-danger btn-reject"><i class="bi bi-x-lg"></i> Reject</button>
@@ -57,21 +59,21 @@
     <tr>
         <td>
             <strong class="data-sale-id"></strong>
-            <div class="data-time" style="font-size:0.75rem; color:#64748b;"></div>
-            <div class="data-branch" style="font-size:0.75rem; color:#0284c7;"></div>
+            <div class="data-time text-muted" style="font-size:0.75rem;"></div>
+            <div class="data-branch text-primary" style="font-size:0.75rem;"></div>
         </td>
         <td>
             <strong class="data-customer"></strong>
-            <div class="data-contact" style="font-size:0.8rem; color:#475569;"></div>
+            <div class="data-contact text-muted" style="font-size:0.8rem;"></div>
         </td>
         <td>
-            <div class="data-terms" style="font-size:0.85rem; font-weight:600; color:#1e293b;"></div>
-            <div class="data-due-date" style="font-size:0.8rem; color:#64748b;"></div>
+            <div class="data-terms" style="font-size:0.85rem; font-weight:600; color:var(--text-main);"></div>
+            <div class="data-due-date text-muted" style="font-size:0.8rem;"></div>
         </td>
         <td class="data-status"></td>
-        <td class="text-right data-total" style="font-size:1.1rem; font-weight:700; color:var(--primary);"></td>
+        <td class="text-right data-total text-primary" style="font-size:1.1rem; font-weight:700;"></td>
         <td class="text-right">
-            <div style="display:flex; gap:6px; justify-content:flex-end;">
+            <div class="flex-row" style="justify-content:flex-end;">
                 <button class="btn btn-sm btn-outline btn-print"><i class="bi bi-printer"></i></button>
                 <button class="btn btn-sm btn-success btn-settle"><i class="bi bi-cash-coin"></i> Settle</button>
             </div>
