@@ -73,7 +73,7 @@ const AdminPayments = {
    */
   async loadPending() {
     try {
-      this.payments = await DB._fetch('/api/pending');
+      this.payments = await DB._fetch('/api/payments/pending');
       
       const badge = document.getElementById('pendingCountBadge');
       if (badge) badge.textContent = this.payments.length;
