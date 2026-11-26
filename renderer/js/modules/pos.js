@@ -162,44 +162,15 @@ const POS = {
   },
 
   async checkout() {
+    if (this.cart.length === 0) return Utils.toast('Cart is empty.', 'warning');
     const paymentMethod = document.getElementById('paymentMethod')?.value;
     const paymentRef = document.getElementById('paymentRef')?.value.trim();
+    const btn = document.getElementById('btnCheckout');
 
     if (paymentMethod !== 'cash' && !paymentRef) {
       return Utils.toast('Transaction reference is required for non-cash payments', 'warning');
     }
 
-    try {
-      const sale = await DB._fetch('/api/sales', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      
-      this.clearCart();
-
-      if (paymentMethod === 'cash') {
-        Utils.toast(`Sale successful! Ref: ${paymentRef}`, 'success');
-        Utils.showPrintDialog(sale);
-      } else {
-        Utils.showModal({
-          title: `<i class="bi bi-hourglass-split" style="color:var(--accent);"></i> Pending Approval`,
-          content: `
-          <div style="text-align:center; padding:15px;">
-          <h4>Sale Submitted Successfully</h4>
-          <p style="color:var(--text-muted); margin-top:8px">Sale <strong>#${sale.id.slice(0,8)}</strong> is waiting for the admin to verify the ${paymentMethod.toUpperCase()} payment reference.</p>
-          <p style="margin-top:10px; font-weight:600;"> Ref: ${paymentRef}</p>
-          </div>
-          `,
-          footer: `<button class="btn btn-primary" onclick="document.querySelector('.modal-overlay').remove()">Understood</button>`
-        });
-      }
-      } catch (err) {
-        Utils.toast(err.message, 'danger');
-      }
-    
-    const btn = document.getElementById('btnCheckout');
-
-    // SECURITY: Idempotency Key prevents double-charging
     const idempotencyKey = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).substring(2);
 
     const originalText = btn.innerHTML;
@@ -210,7 +181,7 @@ const POS = {
       const payload = {
         idempotency_key: idempotencyKey,
         items: this.cart.map(i => ({ productId: i.productId, quantity: i.quantity })), // ONLY send ID and Qty
-        paymentMethod,
+        paymentMethod: paymentMethod,
         payment_reference: paymentRef,
         customer_id: this.selectedCustomer || null,
         vat_rate: this.vatRate
@@ -221,13 +192,28 @@ const POS = {
         body: JSON.stringify(payload)
       });
 
-      Utils.toast(`Sale successful! Total: KES ${sale.total}`, 'success');
-      this.cart = [];
-      this.updateCartDisplay();
-      this.loadProducts(); // Refresh stock
+      this.clearCart();
+
+      if (paymentMethod === 'cash') {
+        Utils.toast(`sale successfull! Ref: ${paymentRef}`, 'success');
+        Utils.showPrintDialog(sale);
+      } else {
+        Utils.showModal({
+          title: `<i class="bi bi-hourglass-split" style="color:var(--accent);"></i> Pending Approval`,
+          content:`
+          <div style="text-align:center; padding:15px;">
+          <h4>Sale submitted successfully</h4>
+          <p style="color:var(--text-muted); margin-top:8px;">Sale <strong>#${sale.id.slice(0,8)}</strong> is waiting for the Admin to verify the ${paymentMethod.toUpperCase()} payment reference.</p>
+          <p style="margin-top:10px; font-weight:600;">Ref: ${paymentRef}</p>
+          </div>
+          `,
+          footer:`<button class="btn btn-primary" onclick="document.querySelector('.modal-overlay').remove()">understood</button>`
+        });
+      }
 
     } catch (err) {
-      Utils.toast(err.message, 'danger');
+      console.error("CHECKOUT ERROR:", err);
+      Utils.toast(err.message || 'checkout failed', 'danger');
     } finally {
       btn.innerHTML = originalText;
       btn.disabled = false;
