@@ -6,7 +6,9 @@ const { asyncHandler } = require('../middleware/errorHandler');
 
 function getClientIp(req) {
     let clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '';
-    if (clientIp.startsWith('::ffff:')) clientIp.substring(7);
+    if (clientIp.startsWith('::ffff:')) {
+         clientIp.substring(7);
+    }
     return clientIp;
 }
 

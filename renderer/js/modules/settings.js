@@ -43,11 +43,11 @@ const Settings = {
         try {
             const data = await DB._fetch('/api/settings/ip-security');
 
-            this.currentIp = data.current_ip;
+            this.currentIp = data.current_ip || 'Unknown';
             this.allowedIps = data.allowed_ips || [];
 
             const ipDisplay = document.getElementById('currentClientIp');
-            if (ipDisplay) ipDisplay.textContent = this.current_Ip;
+            if (ipDisplay) ipDisplay.textContent = this.currentIp;
 
             const allowAllRadio = document.getElementById('ipModeAllowAll');
             const restrictRadio = document.getElementById('ipModeRestrict');
@@ -65,43 +65,50 @@ const Settings = {
 
             this.renderIpList();
         } catch (e) {
-            console.error('Failed to load IP settings: ' + e.message, 'danger');
+            console.error('Failed to load IP settings: ', e);
+            Utils.toast('Failed to load IP settings', 'danger');
         }
     },
 
     renderIpList() {
         const tbody = document.getElementById('allowedIpsTableBody');
-        if (!tbody) return;
+        const template = document.getElementById('tpl-ip-row');
+        if (!tbody || !template) return;
+
+        tbody.innerHTML = '';
 
         if (!this.allowedIps.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No IPs whitelisted yet. Anyone can access if mode is allow all.</td></tr>';
             return;
         }
 
-        tbody.innerHTML = this.allowedIps.map((item, index) => `
-        <tr>
-        <td><strong>${Utils.escapeHtml(item.label || 'Unknown')}</strong></td>
-        <td><code>${Utils.escapeHtml(item.ip)}</code></td>
-        <td>${new Date(item.added_at).toLocaleString()}</td>
-        <td class="text-right">
-        <button class="btn btn-sm btn-danger" data-remove="${index}"><i class="bi bi-trash"></i></button>
-        </td>
-        <tr>
-        `).join('');
+        const fragment = document.createDocumentFragment();
 
-        tbody.querySelectorAll('button[data-remove]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const idx = parseInt(e.target.closest('button').dataset.remove);
-                this.allowedIps.splice(idx, 1);
+        this.allowedIpsList.forEach((item, index) => {
+            const clone = template.content.cloneNode(true);
+
+            clone.querySelector('.data-label').textContent = item.ip;
+            clone.querySelector('.data-date').textContent = new Date(item.added_at).toLocaleString();
+
+            const removeBtn = clone.querySelector('.btn-remove-ip');
+            removeBtn.addEventListener('click', () => {
+                this.allowedIpsList.splice(index, 1);
                 this.renderIpList();
             });
+
+            fragment.appendChild(clone);
         });
+
+        tbody.appendChild(fragment);
     },
 
     addCurrentIp() {
-        if (!this.allowedIps.some(i => i.ip === this.currentIp)) {
+        if (!this.currentIp || this.currentIp === 'Unknown') {
+            return Utils.toast('Your current IP could not br detected', 'warning');
+        }
 
-        return Utils.toast('Your current Ip is already whitelisted', 'warning');
+        if(this.allowedIpsList.some(i => i.ip === this.currentIp)) {
+            return Utils.toast('Your current IP is already whitelisted', 'warning');
         }
 
         this.allowedIps.push({
@@ -109,6 +116,7 @@ const Settings = {
             label: 'My Current Device',
             added_at: new Date().toISOString()
         });
+
         this.renderIpList();
         Utils.toast('IP added to list. Click save to apply.', 'info');
     },
@@ -147,7 +155,7 @@ const Settings = {
                 method: 'POST',
                 body: JSON.stringify({
                     enabled: isRestricted,
-                    allowed_ips: this.allowedIps
+                    allowed_ips: this.allowedIpsList
                  })
             });
             Utils.toast('IP security settings saved', 'success');
@@ -168,6 +176,22 @@ const Settings = {
             btn.disabled = false;
         }
     },
+
+    async saveWhatsApp() {
+        const value = document.getElementById('settingsWhastapp').value.trim();
+        if (!value) return Utils.toast('Please enter a whatsapp number', 'warning');
+
+        try {
+            await DB._fetch('/api/settings', {
+                method: 'POST',
+                body: JSON.stringify({ key: 'admin_whatsapp_number', value })
+            });
+            Utils.toast('Whatsapp number updated', 'success');
+        } catch (e) {
+            Utils.toast(e.message, 'danger');
+        }
+    }
+
 };
 
 window.Settings = Settings;
