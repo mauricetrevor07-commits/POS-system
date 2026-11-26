@@ -73,7 +73,7 @@ const AdminPayments = {
    */
   async loadPending() {
     try {
-      this.payments = await DB._fetch('/api/pending-payments');
+      this.payments = await DB._fetch('/api/pending');
       
       const badge = document.getElementById('pendingCountBadge');
       if (badge) badge.textContent = this.payments.length;
@@ -88,7 +88,7 @@ const AdminPayments = {
    */
   async loadCreditAlerts() {
     try {
-      this.creditAlerts = await DB._fetch('/api/credit-alerts');
+      this.creditAlerts = await DB._fetch('/api/payments/credit-alerts');
       const banner = document.getElementById('creditAlertBanner');
       const overdueBadge = document.getElementById('creditOverdueBadge');
 
