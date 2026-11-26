@@ -11,17 +11,23 @@ const Utils = {
       <p>KPCU Godowns – along Komarocks Road- Off Kangundo Road. P.O Box 42298 – 00100, Nairobi | Tel: +254 700 000 000</p>
     </div>
   `,
+
   escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  },
-  formatCurrency(amount) {
-    return Number(amount).toFixed(2);
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   },
 
-  // ── improved toast with container ─────
+  formatCurrency(amount) {
+    return Number(amount || 0).toFixed(2);
+  },
+
+  // ── TOASTS ────────────────────────────────────────────────────────
   toast(msg, type = 'info') {
-    // ensure container exists
     let container = document.getElementById('toast-container');
     if (!container) {
       container = document.createElement('div');
@@ -31,7 +37,13 @@ const Utils = {
 
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
-    toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i> ${msg}`;
+    
+    const icon = type === 'success' ? 'check-circle' : 
+                 type === 'danger' || type === 'error' ? 'x-circle' : 
+                 type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+    
+    // SECURITY: Escape the message to prevent XSS
+    toast.innerHTML = `<i class="bi bi-${icon}"></i> <span>${Utils.escapeHtml(msg)}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -41,23 +53,45 @@ const Utils = {
     }, 4000);
   },
 
-  showModal({ title, content, size, footer }) {
-    const id = 'modal-' + Date.now();
-    const html = `
-      <div class="modal-overlay" id="${id}">
-        <div class="modal-dialog ${size||'modal-md'}">
-          <div class="modal-header">
-            <h5>${title}</h5>
-            <button onclick="document.getElementById('${id}').remove()">&times;</button>
-          </div>
-          <div class="modal-body">${content}</div>
-          ${footer?`<div class="modal-footer">${footer}</div>`:''}
-        </div>
-      </div>`;
-    document.body.insertAdjacentHTML('beforeend', html);
-    return { close: () => document.getElementById(id).remove() };
+  // ── MODALS (Blurred Background) ───────────────────────────────────
+  showModal({ title, content, footer, size = 'modal-md' }) {
+    // Remove existing modals to prevent stacking
+    document.querySelectorAll('.modal-overlay').forEach(el => el.remove());
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = `modal-dialog ${size}`;
+
+    dialog.innerHTML = `
+      <div class="modal-header">
+        <h5 style="margin:0;">${title}</h5>
+        <button class="btn-close-modal" style="background:none; border:none; font-size:1.5rem; cursor:pointer; color:var(--text-muted);">&times;</button>
+      </div>
+      <div class="modal-body">${content}</div>
+      ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+    `;
+
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    // Close logic
+    const close = () => overlay.remove();
+
+    // 1. Close on X button
+    dialog.querySelector('.btn-close-modal').addEventListener('click', close);
+
+    // 2. Close on backdrop click (clicking outside the white card)
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+
+    // Return close function so the caller can use it
+    return { close };
   },
 
+  // ── PRINTING SYSTEM ───────────────────────────────────────────────
   printHTML(html, title) {
     const win = window.open('', '_blank', 'width=900,height=750');
     win.document.write(`
@@ -530,7 +564,7 @@ const Utils = {
 
     // Restrict staff from printing unapproved sales
     if (role !== 'admin' && !isApproved) {
-      Utils.showModal({
+      const { close } = Utils.showModal({
         title: `<i class="bi bi-shield-lock-fill" style="color:#f59e0b;"></i> Printing Restricted`,
         content: `
           <div style="text-align:center; padding:15px 10px;">
@@ -549,8 +583,10 @@ const Utils = {
             </div>
           </div>
         `,
-        footer: `<button class="btn btn-primary btn-block" onclick="document.querySelector('.modal-overlay')?.remove()">Understood</button>`
+        footer: `<button class="btn btn-primary btn-block" id="btnUnderstood">Understood</button>`
       });
+
+      document.getElementById('btnUnderstood').addEventListener('click', close);
       return;
     }
 
@@ -595,19 +631,33 @@ const Utils = {
     `;
 
     const footer = `
-      <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Cancel</button>
-      <button class="btn btn-outline" onclick="Utils.previewPDF()">
+      <button class="btn btn-outline" id="btnCancelPrint">Cancel</button>
+      <button class="btn btn-outline" id="btnPreviewPDF">
         <i class="bi bi-file-earmark-pdf"></i> View as PDF
       </button>
-      <button class="btn btn-primary" onclick="Utils.executePrint()">
+      <button class="btn btn-primary" id="btnExecutePrint">
         <i class="bi bi-printer"></i> Print Now
       </button>
     `;
 
-    Utils.showModal({
+    const { close } = Utils.showModal({
       title: `<i class="bi bi-printer"></i> Print Document`,
       content: modalContent,
       footer
+    });
+
+    document.getElementById('btnCancelPrint').addEventListener('click', close);
+    
+    document.getElementById('btnPreviewPDF').addEventListener('click', () => {
+      close();
+      Utils.previewPDF();
+    });
+
+    document.getElementById('btnExecutePrint').addEventListener('click', () => {
+      const docType = document.querySelector('input[name="printDocType"]:checked')?.value || 'invoice';
+      const copies = parseInt(document.getElementById('printCopiesCount')?.value || '1', 10);
+      close();
+      Utils.executePrint(sale, docType, copies);
     });
   },
 
@@ -621,8 +671,6 @@ const Utils = {
       ? Utils.generateInvoiceHTML(sale, copies)
       : Utils.generateDeliveryNoteHTML(sale, copies);
     
-    document.querySelector('.modal-overlay')?.remove();
-
     const previewContainer = `
       <div style="max-height:75vh; overflow-y:auto; background:#475569; padding:20px; border-radius:8px; display:flex; justify-content:center;">
         <div id="pdfRenderArea" style="background:white; width:100%; max-width:760px; box-shadow:0 8px 30px rgba(0,0,0,0.3); border-radius:4px; padding:20px; color:#0f172a;">
@@ -631,18 +679,29 @@ const Utils = {
       </div>
     `;
 
-    Utils.showModal({
+    const { close } = Utils.showModal({
       title: `<i class="bi bi-file-earmark-pdf"></i> PDF Preview – ${docType === 'invoice' ? 'Tax Invoice' : 'Delivery Note'}`,
       content: previewContainer,
       footer: `
-        <button class="btn btn-outline" onclick="document.querySelector('.modal-overlay')?.remove()">Close Preview</button>
-        <button class="btn btn-outline" onclick="Utils.downloadPDFFromPreview('${docType === 'invoice' ? 'Invoice' : 'DeliveryNote'}_${(sale.id||'').slice(0,8)}')">
+        <button class="btn btn-outline" id="btnClosePreview">Close Preview</button>
+        <button class="btn btn-outline" id="btnDownloadPDF">
           <i class="bi bi-download"></i> Download PDF
         </button>
-        <button class="btn btn-primary" onclick="Utils.executePrint()">
+        <button class="btn btn-primary" id="btnPrintFromPreview">
           <i class="bi bi-printer"></i> Print Document
         </button>
       `
+    });
+
+    document.getElementById('btnClosePreview').addEventListener('click', close);
+    
+    document.getElementById('btnDownloadPDF').addEventListener('click', () => {
+      Utils.downloadPDFFromPreview(`${docType === 'invoice' ? 'Invoice' : 'DeliveryNote'}_${(sale.id||'').slice(0,8)}`);
+    });
+
+    document.getElementById('btnPrintFromPreview').addEventListener('click', () => {
+      close();
+      Utils.executePrint(sale, docType, copies);
     });
   },
 
@@ -663,13 +722,15 @@ const Utils = {
     }
   },
 
-  executePrint(passedSale) {
+  executePrint(passedSale, explicitDocType = null, explicitCopies = null) {
     const sale = passedSale || Utils._activePrintSale;
     if (!sale) return;
-    const docType = document.querySelector('input[name="printDocType"]:checked')?.value || 'invoice';
-    const copies = parseInt(document.getElementById('printCopiesCount')?.value || '1', 10);
     
-    // Close modal
+    // Use explicit values if passed, otherwise read from DOM
+    const docType = explicitDocType || document.querySelector('input[name="printDocType"]:checked')?.value || 'invoice';
+    const copies = explicitCopies || parseInt(document.getElementById('printCopiesCount')?.value || '1', 10);
+    
+    // Close modal if it's still open
     document.querySelector('.modal-overlay')?.remove();
 
     if (docType === 'invoice') {

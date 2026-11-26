@@ -3,21 +3,37 @@
 /* the dark, blurred background behind the modal */
 .modal-overlay {
     position: fixed;
-    inset: 0;
-    background-color: rgba(28, 25, 23, 0.6);
-    backdrop-filter: blur(4px);
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     display: flex;
     justify-content: center;
     align-items: center;
     z-index: 9999;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3 ease, visibility 0.3 ease;
+    padding: 20px;
 }
 
 .modal-overlay.active {
     opacity: 1;
     visibility: visible;
+}
+
+.modal-dialog {
+    background-color: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0 , 0.1);
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: modalPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+    from {opacity: 0; transform: scale(0.95) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .modal-content {
@@ -35,7 +51,7 @@
 }
 
 .modal-header {
-    padding: 20px 24px;
+    padding: 16px 20px;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
@@ -61,12 +77,15 @@
     color: var(--danger)
 }
 
+.modal-header h5 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
 .modal-body {
-    padding: 24px;
+    padding: 20px;
     overflow-y: auto;
-    color: var(--text-muted);
-    font-size: 0.95rem;
-    line-height: 1.5;
 }
 
 .modal-footer {
@@ -75,5 +94,27 @@
     background-color: var(--bg-body);
     display: flex;
     justify-content: flex-end;
-    gap: 12px
+    gap: 10px
+}
+
+.modal-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: 1 20px 25px -5px rgba(0, 0, 0, 0.1), 1 10px 10px -5px rgba(0, 0, 0, 0.04);
+    width: 100%;
+    max-width: 500px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3 cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+    from {opacity:0;}
+    to {opacity: 1;}
+}
+
+@keyframes slideUp {
+    from {opacity:0; transform: translateY(20px) scale(0.95);}
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
