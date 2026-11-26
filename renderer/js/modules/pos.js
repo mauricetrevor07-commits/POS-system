@@ -192,7 +192,8 @@ const POS = {
         body: JSON.stringify(payload)
       });
 
-      this.clearCart();
+      this.cart=[];
+      this.updateCartDisplay();
 
       if (paymentMethod === 'cash') {
         Utils.toast(`sale successfull! Ref: ${paymentRef}`, 'success');
