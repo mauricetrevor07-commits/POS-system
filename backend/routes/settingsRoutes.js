@@ -35,7 +35,7 @@ router.post('/ip-security', authMiddleware, adminOnly, asyncHandler(async (req, 
     if (enabled !== undefined) {
     await db.query(`
         INSERT INTO settings (key, value) VALUES ('ip_restriction_enabled', $1)
-        ON CONFLICT (key) DO UPDATE SET value = $1
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     `, [enabled ? 'true' : 'false']
 );
     }
@@ -43,9 +43,8 @@ router.post('/ip-security', authMiddleware, adminOnly, asyncHandler(async (req, 
     if (allowed_ips !== undefined) {
         await db.query(
             `INSERT INTO settings (key, value) VALUES ('branch_allowed_ips', $1)
-            ON CONFLICT (key) DO UPDATE SET value = $1`,
-            [JSON.stringify(allowed_ips)]
-        );
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+            [JSON.stringify(allowed_ips)]);
     }
 
     res.json({ success: true });
