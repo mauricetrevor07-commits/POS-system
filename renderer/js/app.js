@@ -153,10 +153,18 @@ function buildSidebar() {
 
   // Add Nav Links
   items.forEach(item => {
+    const isPendingPage = item.page === 'pending-payments';
+    const badgeHTML = isPendingPage
+    ? `<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`
+    : '';
+
     html += `
       <li class="nav-item">
-        <a href="#" data-page="${item.page}">
+        <a href="#" data-page="${item.page}" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+            <span style="display:flex; align-items:center; gap:12px;">
           <i class="bi ${item.icon}"></i> ${item.label}
+          </span>
+          ${badgeHTML}
         </a>
       </li>
     `;
@@ -286,5 +294,23 @@ window.toggleSidebar = function() {
   }
 };
 
+setInterval(async () => {
+  const role = localStorage.getItem('userRole');
+  if (role !== 'admin' || !localStorage.getItem('authToken')) return;
+
+  try {
+    const data = await DB._fetch('/api/notifications/pending-count');
+    const badge = document.getElementById('pendingAlertBadge');
+
+    if (badge) {
+      if (data.count > 0) {
+        badge.textContent = data.count;
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  } catch (e) {}
+}, 15000);
 
 }
