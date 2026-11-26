@@ -43,22 +43,34 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
         const evaluatedItems =[];
 
         for (const item of items) {
-            const prod = await client.query(
-                `SELECT p.name, p.price, COALESCE(bs.stock, 0)::real AS stock
-                FROM products p
-                LEFT JOIN branch_stock bs ON p.id = bs.product_id AND bs.branch_id = $1
-                WHERE p.id = $2 FOR UPDATE`,
-                [saleBranchId, item.productId]
+            const prodResult = await client.query(
+                `SELECT p.name, price FROM products WHERE id = $1 FOR UPDATE`,
+                [item.productId]
+            );
+            if (!prodResult.rows.length) throw new Error(`Product not found`);
+            const product = prodResult.rows[0];
+            
+            let stockResult = await client.query(
+                `SELECT stock FROM branch_stock WHERE product_id = $1 AND branch_id = $2 FOR UPDATE`,
+                [item.productId, saleBranchId]
             );
 
-            if (!prod.rows.length) throw new Error(`Product not found`);
-            const product = prod.rows[0];
+            let currentStock = 0;
+            if (stockResult.rows.length > 0) {
+                currentStock = parseFloat(stockResult.rows[0].stock);
+            } else {
+                await client.query(
+                    `INSERT INTO branch_stock (branch_id, product_id, stock) VALUES ($1, $2, 0) ON CONFLICT DO NOTHING`,
+                    [saleBranchId, item.productId]
+                );
+            }
 
-            if (product.stock < item.quantity) {
-                throw new Error(`Insufficient stock for ${product.name} (Available: ${product.stock})`);
+            if (currentStock < item.quantity) {
+                throw new Error(`Insufficient stock for ${product.name}. Available: ${currentStock }`);
             }
             const price = parseFloat(product.price);
             subtotal += price * item.quantity;
+
             evaluatedItems.push({ productId: item.productId, productName: product.name, quantity: item.quantity, price });
         }
         const vatAmount = finalVatRate > 0 ? Math.round(subtotal * finalVatRate * 100)/ 100 : 0;
@@ -74,7 +86,7 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
 
         for (const item of evaluatedItems) {
             await client.query(
-                `INSERT INTO sale_items ("saleId", "productId", "productName", quantity, price) VALUES ($1,$2,$3,$4,$5)`,
+                `INSERT INTO sale_items ("saleid", "productid", "productName", quantity, price) VALUES ($1,$2,$3,$4,$5)`,
                 [saleId, item.productId, item.productName, item.quantity, item.price]
             );
 

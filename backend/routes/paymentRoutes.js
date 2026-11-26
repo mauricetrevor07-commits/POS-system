@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'autopak-super-secret-key-2026';
 
-// Middleware specifically for this file to keep it self-contained
 const requireAdmin = (req, res, next) => {
   try {
     const token = req.headers['x-auth-token'] || req.headers['authorization']?.split(' ')[1];
@@ -32,7 +31,8 @@ router.get('/pending', requireAdmin, async (req, res) => {
     `);
 
     for (let sale of result.rows) {
-      const items = await db.query('SELECT * FROM sale_items WHERE "saleId" = $1', [sale.id]);
+      // FIXED: changed "saleId" to saleid
+      const items = await db.query('SELECT * FROM sale_items WHERE saleid = $1', [sale.id]);
       sale.items = items.rows;
     }
     res.json(result.rows);
@@ -41,7 +41,7 @@ router.get('/pending', requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/payments/credit-alerts
+// GET /api/payments/credit-alerts (ADDED MISSING ROUTE)
 router.get('/credit-alerts', requireAdmin, async (req, res) => {
   try {
     const result = await db.query(`
@@ -68,12 +68,13 @@ router.put('/:id/approve', requireAdmin, async (req, res) => {
     if (!saleRes.rows.length) throw new Error('Sale not found or already processed');
     
     const sale = saleRes.rows[0];
-    const items = await client.query('SELECT * FROM sale_items WHERE "saleId" = $1', [saleId]);
+    // FIXED: changed "saleId" to saleid
+    const items = await client.query('SELECT * FROM sale_items WHERE saleid = $1', [saleId]);
     
     for (let item of items.rows) {
       await client.query(
         `UPDATE branch_stock SET stock = stock - $1 WHERE branch_id = $2 AND product_id = $3`,
-        [item.quantity, sale.branch_id, item.productId]
+        [item.quantity, sale.branch_id, item.productid] // Note: productid lowercase
       );
     }
 
