@@ -32,11 +32,13 @@ const Utils = {
     if (!container) {
       container = document.createElement('div');
       container.id = 'toast-container';
+      container.className = 'toast-container';
+
       document.body.appendChild(container);
     }
 
     const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
+    toast.className = `toast ${type}`;
     
     const icon = type === 'success' ? 'check-circle' : 
                  type === 'danger' || type === 'error' ? 'x-circle' : 
@@ -47,9 +49,8 @@ const Utils = {
     container.appendChild(toast);
 
     setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateX(50px)';
-      setTimeout(() => toast.remove(), 300);
+      toast.classList.add('fade-out');
+      toast.addEventListener('animationend', () => toast.remove());
     }, 4000);
   },
 
