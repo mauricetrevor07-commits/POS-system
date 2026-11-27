@@ -214,7 +214,7 @@ const Settings = {
             const tbody = document.getElementById('devicesTableBody');
             if (!tbody) return;
 
-            const devices = davData.devices || [];
+            const devices = devData.devices || [];
             if (!devices.length) {
                 tbody.innerHTML = '<tr><td> colspan="5" class="text-center text-muted">No terminals enrolled yet.</td></tr>';
                 return;
