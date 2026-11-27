@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { deviceGate, getAuthorizedDevice } = require('./middleware/auth.js');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -18,7 +19,6 @@ const transferRoutes = require('./routes/transferRoutes')
 const settingsRoutes = require('./routes/settingsRoutes');
 const customerRoutes = require('./routes/customerRoutes')
 const notificationRoutes = require('./routes/notificationRoutes');
-const { deviceGate, getAuthorizedDevice } = require('./middleware/auth.js');
 const deviceRoutes = require('./routes/deviceRoutes.js');
 
 const app = express();

@@ -43,7 +43,7 @@ async function getAuthorizedDevice(req) {
 
 async function deviceGate(req, res, next) {
     try {
-        const device = await getAuthorizedDevicer(req);
+        const device = await getAuthorizedDevice(req);
         if (!device) {
             res.clearCookie(DEVICE_COOKIE_NAME, {path: '/'});
             return res.status(403).json({
