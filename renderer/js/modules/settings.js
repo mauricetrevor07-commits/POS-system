@@ -228,7 +228,7 @@ const Settings = {
                     <td>${d.is_active ? '<span class="badge badge-success">Active</span>' : '<span class="badge badge-danger">Revoked</span>'}</td>
                     <td>
                         ${d.is_active && !d.is_current
-                            ? `<button class="btn btn-sm btn-danger" onclick="settings.revokeDevice(${d.id})">Revoke</button`
+                            ? `<button class="btn btn-sm btn-danger" onclick="Settings.revokeDevice(${d.id})">Revoke</button`
                             : '-'}
                     </td>
                 <tr>
