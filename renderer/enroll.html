@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terminal Authorization</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: var(--bg-surface);}
+        .enroll-card {background: var(--bg-surface); padding: 32px; border-radius: 10px; max-width: 380px; width: 90%; box-shadow: 0 4px 20px rgba(0, 0, 0, .08); }
+        .enroll-card h2 { margin-top: 0; font-size: 1.25rem; }
+        .enroll-card input { width: 100%; padding: 10px; margin: 12px 0; text-transform: uppercase; font-size: 1rem; letter-spacing: 1px;}
+        .enroll-card button { width: 100%; padding: 10px; cursor: pointer;}
+        #enrollError { color: var(--danger); font-size: .9rem; margin-top: 10px; display: none;}
+    </style>
+</head>
+<body>
+    <div class="enroll-card">
+        <h2>Unauthorized Terminal</h2>
+        <p>This system is restricted to approved Autopak POS terminals. Enter a one-time enrollment code from an administrator.</p>
+        <form id="enrollForm">
+            <input type="text" id="enrollCode" placeholder="A1B2C3" required autocomplete="off">
+            <button type="submit" id="enrollBtn" class="btn btn-primary">Authorize Terminal</button>
+            <div id="enrollError"></div>
+        </form>
+    </div>
+    <script>
+        document.getElementById('enrollForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('enrollError');
+            const btn = document.getElementById('enrollBtn');
+            errEl.style.display = 'none';
+            btn.disabled = true;
+            btn.textContent = 'Authorizing...';
+            try {
+                const res = await fetch('/api/devices/enroll', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: document.getElementById('enrollCode').value.trim() })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Authorization failed');
+                window.location.href = '/';
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Authorize Terminal';
+            }
+        });
+    </script>
+</body>
+</html>

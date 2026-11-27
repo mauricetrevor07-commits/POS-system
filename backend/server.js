@@ -18,6 +18,8 @@ const transferRoutes = require('./routes/transferRoutes')
 const settingsRoutes = require('./routes/settingsRoutes');
 const customerRoutes = require('./routes/customerRoutes')
 const notificationRoutes = require('./routes/notificationRoutes');
+const { deviceGate, getAuthorizedDevice } = require('./middleware/auth.js');
+const deviceRoutes = require('./routes/deviceRoutes.js');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -25,12 +27,24 @@ app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json({ limit: '1mb' }));
-const apiLimiter = rateLimit({ windowsMs: 15 * 60 * 1000, max: 5000});
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5000});
 app.use('/api/', apiLimiter);
+app.use('/api/devices', deviceRoutes);
+app.use('/api/devices', deviceRoutes);
+app.use('/api', deviceGate);
+app.use(async (req, res, next) => {
+  const openPaths = ['/css', '/manifest.json', '/favicon', '/apple-touch-icon', '/enroll.html'];
+  if (openPaths.some(p => req.path.startsWith(p))) return next();
+
+  const device = await getAuthorizedDevice(req);
+  if (!device) {
+    return res.sendFile(path.join(__dirname, '../renderer/enroll.html'));
+  }
+  next();
+});
 app.use(express.static(path.join(__dirname, '../renderer')));
 app.use('/templates', express.static(path.join(__dirname, '../renderer/templates')));
 app.use('/templates', express.static(path.join(__dirname, 'templates')));
-
 app.use('/api', authRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
@@ -48,7 +62,7 @@ app.all('/api/*', (req, res) => {
 });
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'renderer', 'index.html'));
+  res.sendFile(path.join(__dirname, '../renderer/index.html'));
 });
 
 app.use(globalErrorHandler);

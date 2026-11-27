@@ -63,6 +63,21 @@ async function init() {
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  // authorized devices
+  await query(`
+    CREATE TABLE IF NOT EXISTS authorized_devices (
+    id SERIAL PRIMARY KEY,
+    device_label TEXT NOT NULL,
+    branch_id INTEGER REFERENCES branches(id),
+    token_hash TEXT UNIQUE NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+    enrolled_at TIMESTAMPTZ DEFAULT NOW(),
+    revoked_at TIMESTAMPTZ
+    )
+    `);
+
   const branchCount = await query("SELECT COUNT(*)::int FROM branches");
   if (branchCount.rows[0].count === 0) {
     await query("INSERT INTO branches (id, name, code, location, phone) VALUES (1, 'Nairobi Branch (KPCU Godowns)', 'NRB-01', 'KPCU Godowns – along Komarocks Road- Off Kangundo Road, Nairobi', '+254700000000') ON CONFLICT (id) DO NOTHING");
@@ -104,6 +119,19 @@ async function init() {
     await query("INSERT INTO settings (key, value) VALUES ('ip_restriction_enabled', 'false')");
   }
 
+  // one time enrollment codes
+  await query(`
+    CREATE TABLE IF NOT EXISTS device_enrollment_codes (
+    id SERIAL PRIMARY KEY,
+    code TEXT UNIQUE NOT NULL,
+    branch_id INTEGER REFERENCES branches(id),
+    device_label TEXT NOT NULL,
+    created_by TEXT,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+    `);
   // ── Products ─────────────────────────
   await query(`
     CREATE TABLE IF NOT EXISTS products (
