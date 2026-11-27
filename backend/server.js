@@ -49,7 +49,7 @@ app.use('/api', authRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/branch', branchRoutes);
+app.use('/api/branches', branchRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/transfers', transferRoutes);

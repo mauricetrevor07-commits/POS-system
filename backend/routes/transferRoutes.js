@@ -2,11 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { randomUUID } = require ('crypto');
 const db = require('../database');
-const { authMiddleware } = require('../middleware/auth');
-const { asyncHandler } = require('../middleware/errorHandler');
-const { asyncWrapProviders } = require('async_hooks');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET;
 
-router.get('/', authMiddleware,asyncHandler(async (req, res) => {
+const auth = (req, res, next) => {
+    try{
+        const token = req.headers['x-auth-token'] || req.headers['authorisation']?.split(' ')[1];
+        if (!token) return res.status(401).json({ error: 'Unauthorised'});
+        req.user = jwt.verify(token, JWT_SECRET);
+        next();
+    } catch (err) {
+        res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
+router.get('/', auth, async (req, res) => {
+    try {
     const result = await db.query(`
         SELECT t.*,
             b1.name AS from_branch_name,
@@ -30,13 +41,17 @@ router.get('/', authMiddleware,asyncHandler(async (req, res) => {
             }
 
             res.json(transfers);
-}));
+        } catch (err) {
+            console.error("GET Transfers Error:", err);
+            res.status(500).json({ error: err.message });
+        }
+});
 
-router.post('/', authMiddleware, asyncHandler(async (req, res) => {
+router.post('/', auth, async (req, res) => {
     const { from_branch_id, to_branch_id, notes, items } = req.body;
     const transferId = randomUUID();
-
     const client = await db.connect();
+
     try {
         await client.query('BEGIN');
 
@@ -51,6 +66,17 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
                     VALUES ($1, $2. $3)
                     `, [transferId, item.product_id, item.quantity]);
 
+                    const stockCheck = await client.query(
+                        `SELECT stock FROM branch_stock WHERE branch_id = $1 AND product_id = $2 FOR UPDATE`,
+                        [from_branch_id, item.product_id]
+                    );
+
+                    if (!stockCheck.rows.length || stockCheck.rows[0].stock < item.quantity)
+                    {
+                        throw new Error(`INSUFFICIENT stock for product ID ${item.product_id}
+                        `);
+                    }
+
                     await client.query(`
                         UPDATE branch_stock
                         SET stock = stock - $1
@@ -62,20 +88,21 @@ router.post('/', authMiddleware, asyncHandler(async (req, res) => {
             res.status(201).json({ id: transferId, message: 'Transfer Initiated' });
     } catch (err) {
         await client.query('ROLLBACK');
-        throw err;
+        console.error("POST Transfer Error:", err);
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }
-}));
+});
 
-router.put('/:id/receive', authMiddleware, asyncHandler(async (req, res) => {
+router.put('/:id/receive', auth, async (req, res) => {
     const transferId = req.params.id;
     const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
-        const transferRes = await client.query('SELECT * FROM transfers WHERE id = $1 AND status = $2', [transferId,'pending']);
+        const transferRes = await client.query('SELECT * FROM transfers WHERE id = $1 AND status = $2 FOR UPDATE', [transferId,'pending']);
         if (!transferRes.rows.length) throw new Error('Transfer not found or already processed');
         const transfer = transferRes.rows[0];
         const itemsRes = await client.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [transferId]);
@@ -99,20 +126,20 @@ router.put('/:id/receive', authMiddleware, asyncHandler(async (req, res) => {
             res.json({ success:true});
         } catch (err) {
             await client.query('ROLLBACK');
-            throw err;
+            res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }
-}));
+});
 
-router.put('/:id/cancel', authMiddleware, asyncHandler(async (req, res) => {
+router.put('/:id/cancel', auth, async (req, res) => {
     const transferId = req.params.id;
     const client = await db.connect();
 
     try {
         await client.query('BEGIN');
 
-        const transferRes = await client.query('SELECT * FROM transfers WHERE id = $1 AND status = $2', [transferId, 'pending']);
+        const transferRes = await client.query('SELECT * FROM transfers WHERE id = $1 AND status = $2 FOR UPDATE', [transferId, 'pending']);
         if (!transferRes.rows.length) throw new Error('Transfer not found or already processed');
 
         const transfer = transfer = transferRes.rows[0];
@@ -131,10 +158,10 @@ router.put('/:id/cancel', authMiddleware, asyncHandler(async (req, res) => {
         res.json({ success: true});
     } catch (err) {
         await client.query('ROLLBACK');
-        throw err;
+        res.status(500).json({ error: err.message });
     } finally {
         client.release();
     }
-}));
+});
 
 module.exports = router;
