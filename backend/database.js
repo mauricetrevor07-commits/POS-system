@@ -211,6 +211,32 @@ async function init() {
     )
   `);
 
+  //transfers
+  await query(`
+    CREATE TABLE IF NOT EXISTS transfers (
+      id TEXT PRIMARY KEY,
+      from_branch_id INTEGER NOT NULL,
+      to_branch_id INTEGER NOT NULL,
+      status TEXT DEFAULT 'pending',
+      notes TEXT,
+      created_by TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      received_by TEXT,
+      received_at TIMESTAMPTZ
+      )
+    `);
+
+    //transfer items
+    await query(`
+      CREATE TABLE IF NOT EXISTS transfer_items (
+        id SERIAL PRIMARY KEY,
+        transfer_id TEXT NOT NULL REFERENCES transfers(id) ON DELETE CASCADE,
+        product_id TEXT NOT NULL,
+        quantity REAL NOT NULL
+        )
+     `);
+
+
   // ── Database Performance Indexes ──────
   const indexes = [
     "CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON sales(timestamp)",

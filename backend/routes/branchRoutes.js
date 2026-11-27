@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const db = require('../database.js');
 const jwt = require('jsonwebtoken');
-const { DEFAULT_INTERCEPT_RESOLUTION_PRIORITY } = require('puppeteer-core');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const auth = (req, res, next) => {
@@ -17,7 +16,7 @@ const auth = (req, res, next) => {
 };
 
 // GET /api/branches
-router.get('/', auth, async (req, res) => {
+router.get('/branches', auth, async (req, res) => {
   try {
   const result = await db.query('SELECT id, name, location FROM branches ORDER BY id');
   res.json(result.rows);
@@ -39,11 +38,11 @@ router.get('/branch', auth, async (req, res) => {
     let whatsapp = process.env.ADMIN_WHATSAPP_NUMBER || '+254700000000';
     try {
       const waSetting = await db.query("SELECT value FROM settings WHERE key = 'admin_whatsapp_number' ");
-      if (waSetting.rows.length > 0) whatsapp = waSetting.rows[0].values;
+      if (waSetting.rows.length > 0) whatsapp = waSetting.rows[0].value;
     } catch (settingsErr) {
       console.warn("settings table error (using fallback):", settingsErr.message);
     }
-    req.json({
+    res.json({
       ...branchInfo,
       whatsapp
     });

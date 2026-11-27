@@ -30,7 +30,6 @@ app.use(express.json({ limit: '1mb' }));
 const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5000});
 app.use('/api/', apiLimiter);
 app.use('/api/devices', deviceRoutes);
-app.use('/api/devices', deviceRoutes);
 app.use('/api', deviceGate);
 app.use(async (req, res, next) => {
   const openPaths = ['/css', '/manifest.json', '/favicon', '/apple-touch-icon', '/enroll.html'];

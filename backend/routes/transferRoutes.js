@@ -56,14 +56,14 @@ router.post('/', auth, async (req, res) => {
         await client.query('BEGIN');
 
         await client.query(`
-            INSERT INTO transfers (id, from_branch_id, status, notes, created_by, created_at)
+            INSERT INTO transfers (id, from_branch_id, to_branch_id, status, notes, created_by, created_at)
             VALUES ($1, $2, $3, 'pending', $4, $5, NOW())
             `, [transferId, from_branch_id,to_branch_id, notes, req.user.username]);
 
             for (let item  of items) {
                 await client.query(`
                     INSERT INTO transfer_items (transfer_id, product_id, quantity)
-                    VALUES ($1, $2. $3)
+                    VALUES ($1, $2, $3)
                     `, [transferId, item.product_id, item.quantity]);
 
                     const stockCheck = await client.query(
@@ -142,7 +142,7 @@ router.put('/:id/cancel', auth, async (req, res) => {
         const transferRes = await client.query('SELECT * FROM transfers WHERE id = $1 AND status = $2 FOR UPDATE', [transferId, 'pending']);
         if (!transferRes.rows.length) throw new Error('Transfer not found or already processed');
 
-        const transfer = transfer = transferRes.rows[0];
+        const transfer = transferRes.rows[0];
         const itemsRes = await client.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [transferId]);
 
         for (let item of itemsRes.rows) {
