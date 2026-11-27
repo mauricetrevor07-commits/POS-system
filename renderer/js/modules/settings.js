@@ -202,14 +202,25 @@ const Settings = {
             ]);
 
             const select = document.getElementById('deviceBranchSelect');
-            if (select && Array.isArray(branchData.branches || branchData)) {;
-                select.innerHTML = branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+            const branches = Array.isArray(branchData)
+            ? branchData
+            : (branchData.branches || branchData.data || []);
+
+            if (select) {
+                select.innerHTML = '<option value="">All Branches (HQ / Admin)</option>' +
+                branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
             }
 
             const tbody = document.getElementById('devicesTableBody');
             if (!tbody) return;
 
-            tbody.innerHTML = (devData.devices || []).map(d => `
+            const devices = davData.devices || [];
+            if (!devices.length) {
+                tbody.innerHTML = '<tr><td> colspan="5" class="text-center text-muted">No terminals enrolled yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = devices.map(d => `
                 <tr>
                     <td>${d.device_label} ${d.is_current ? '<span class="badge badge-info">This PC</span>' : ''}</td>
                     <td>${d.branch_name || 'All Branches'}</td>
