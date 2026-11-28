@@ -535,17 +535,22 @@ const Products = {
       <div style="margin-top:14px;">
         <strong>Existing Categories:</strong>
         <ul style="margin-top:6px; padding-left:0; list-style:none; font-size:0.85rem;">
-          ${this.categories.map(c => `
-            <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
+          ${this.categories.length ? this.categories.map(c => `
+            <li style="display:flex; justify-content:space-between; align-items:center;gap:8px; padding:6px 0; border-bottom:1px solid var(--border);">
               <span>
               <strong>${Utils.escapeHtml(c.name)}</strong>:
               ${(c.attributes_schema || []).map(a => Utils.escapeHtml(a.label)).join(', ') || 'No custom parameters'}
               </span>
-              <button class="btn btn-danger btn-sm" onclick="Products.deleteCategory(${c.id}, '${Utils.escapeHtml(c.name)}')">
+              <span style="display:flex; gap:6px; flex-shrink:0;">
+                <button class="btn btn-secondary btn-sm" onclick="Products.editCategory(${c.id})" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </button>
+              <button class="btn btn-danger btn-sm" onclick="Products.deleteCategory(${c.id}", title="Delete">
                 <i class="bi bi-trash"></i>
               </button>
+            </span>
         </li>
-      `).join('')}
+      `).join('') : '<li style="color:var(--text-muted); padding:6px 0;">No categories defined yet.</li>'}
       </ul>
       </div>
     `,
@@ -581,8 +586,25 @@ const Products = {
           });
         },
 
-        async deleteCategory(id, name) {
+        editCategory(id) {
+          const cat = this.categories.find(c => c.id === id);
+          if (!cat) return;
+
+          document.getElementById('catNameInput').value = cat.name;
+          document.getElementById('catParamsInput').value = (cat.attributes_schema || [])
+            .map(a => a.label)
+            .join(', ');
+
+          const saveBtn = document.getElementById('btnSaveCategory');
+          if (saveBtn) saveBtn.textContent = 'Update Category';
+          document.getElementById('catParamsInput').focus();
+        },
+
+        async deleteCategory(id) {
+          const cat = this.categories.find(c => c.id === id);
+          const name = cat ? cat.name : 'this category';
           if (!confirm(`Delete category "${name}"? Existing products in this category will remain intact.`)) return;
+
           try {
             await DB._fetch(`/api/products/categories/${id}`, { method: 'DELETE' });
             document.querySelector('.modal-overlay')?.remove();
