@@ -169,7 +169,7 @@ async function init() {
   await query(`
     CREATE TABLE IF NOT EXISTS sales (
       id TEXT PRIMARY KEY,
-      idempotency_key TEXT UNIQUE, -- 👈 ADDED FOR SECURITY
+      idempotency_key TEXT UNIQUE,
       branch_id INTEGER NOT NULL,
       customer_id TEXT REFERENCES customers(id),
       timestamp TIMESTAMPTZ DEFAULT NOW(),
@@ -225,6 +225,7 @@ async function init() {
       received_at TIMESTAMPTZ
       )
     `);
+    try { await query("ALTER TABLE transfers ADD COLUMN IF NOT EXISTS admin_seen BOOLEAN DEFAULT false"); } catch (_) {}
 
     //transfer items
     await query(`
@@ -235,6 +236,35 @@ async function init() {
         quantity REAL NOT NULL
         )
      `);
+
+    //product categories
+    await query(`
+        CREATE TABLE IF NOT EXISTS product_categories (
+        id SERIAL PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        attributes_schema JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      try {
+        await query("ALTER TABLE products ADD COLUMN IF NOT EXISTS attributes JSONB DEFAULT '{}'::jsonb");
+      } catch (_) {}
+
+      const catCount = await query("SELECT COUNT (*)::int FROM product_categories");
+      if (catCount.rows[0].count === 0) {
+        await query(
+          `INSERT INTO product_categories (name, attributes_schema) VALUES ($1, $2::jsonb)`,
+          [
+            'Pipes',
+            JSON.stringify([
+              { key: 'outer_diameter_mm', label: 'Outer Diameter (mm)', type: 'number' },
+              { key: 'nominal_size_in', label: 'nominal Size (in)', type: 'text' },
+              { key: 'pn', label: 'PN Category', type: 'text' },
+              { key:'sdr', label: 'SDR Category', type: 'text' }
+            ])
+          ]
+        );
+      }
 
 
   // ── Database Performance Indexes ──────

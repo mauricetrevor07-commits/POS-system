@@ -4,6 +4,7 @@ const Products = {
   viewMode: 'inventory',
   matrixCategory: 'all',
   parsedImportRows: [],
+  categories: [],
 
   async render() {
     const container = document.getElementById('page-content');
@@ -30,6 +31,7 @@ const Products = {
     document.getElementById('btnExportTemplate')?.addEventListener('click', () => this.exportStockTemplate());
     document.getElementById('btnImportStock')?.addEventListener('click', () => this.openImportModal());
     document.getElementById('btnAddProduct')?.addEventListener('click', () => this.openModal());
+    document.getElementById('btnManagecategories')?.addEventListener('click', () => this.openCategoryModal());
 
     const filters = ['prodSearchInput', 'prodCatFilter', 'prodStockFilter'];
     filters.forEach(id => {
@@ -61,8 +63,14 @@ const Products = {
     const tbody = document.getElementById('productListBody');
 
     try {
-      const response = await DB._fetch('/api/products');
-      this.products = Array.isArray(response) ? response : [];
+      const [prodRes, catRes] = await Promise.all([
+        DB._fetch('/api/products'),
+        DB._fetch('/api/products/categories').catch(() => [])
+      ]);
+      this.products = Array.isArray(prodRes) ? prodRes : [];
+      this.categories = Array.isArray(catRes) ? catRes : [];
+
+      this.populateCategoryFilter();
       this.applyFilters();
 
     } catch (e) {
@@ -74,6 +82,25 @@ const Products = {
     }
   },
 
+  populateCategoryFilter() {
+    const select = document.getElementById('prodCatFilter');
+    if (!select) return;
+    const currentVal = select.value || 'all';
+    const names = new Set(this.categories.map(c => c.name));
+    this.products.forEach(p => {if (p.category) names.add(p.category); });
+
+    select.innerHTML = '<option value="all">All Categories</option>' +
+    Array.from(names).sort().map(n => `<option value="${Utils.escapeHtml(n)}">${Utils.escapeHtml(n)}</option>`).join(' ');
+    select.value = currentVal;
+  },
+
+  formatAttributesSummary(attrs) {
+    if (!attrs || typeof attrs !== 'object') return '';
+    const entries = Object.entries(attrs).filter(([, v]) => v !== null && v !== undefined && String(v).trim() !== '');
+    if (!entries.length) return '';
+    return entries.map(([k, v]) => `${Utils.escapeHtml(String(v))}`).join(' &bull; ');
+  },
+
   applyFilters() {
     const query = (document.getElementById('prodSearchInput')?.value || '').toLowerCase();
     const cat = document.getElementById('prodCatFilter')?.value || 'all';
@@ -82,12 +109,10 @@ const Products = {
     const safeProducts = Array.isArray(this.products) ? this.products : [];
 
     this.filteredProducts = safeProducts.filter(p => {
-      const pCat = (p.category || '').toLowerCase();
+      const pCat = p.category || '';
       const pName = (p.name || '').toLowerCase();
       
-      if (cat === 'pipe' && !(pCat.includes('pipe') || pName.includes('pipe'))) return false;
-      if (cat === 'sack' && !(pCat.includes('sack') || pName.includes('sack'))) return false;
-      if (cat === 'fitting' && !(pCat.includes('fitting') || pName.includes('coupler'))) return false;
+      if (cat !== 'all' && pCat.toLowerCase() !== cat.toLowerCase()) return false;
 
       const s = parseFloat(p.stock || 0);
       if (stock === 'in_stock' && s <= 0) return false;
@@ -96,39 +121,39 @@ const Products = {
 
       if (query) {
         const barcode = (p.barcode || '').toLowerCase();
-        if (!pName.includes(query) && !pCat.includes(query) && !barcode.includes(query)) return false;
+        const attrStr = JSON.stringify(p.attributes || {}).toLowerCase();
+        if (!pName.includes(query) && !pCat.includes(query) && !barcode.includes(query) && !attrStr.includes(query)) {
+          return false;
       }
+    }
       return true;
-    });
+  });
 
-    this.renderInventoryTable();
-  },
-
+  this.renderInventoryTable();
+},
   renderInventoryTable() {
     const badge = document.getElementById('prodCountBadge');
     if (badge) badge.textContent = `${this.filteredProducts.length} of ${this.products.length} items`;
 
     const tbody = document.getElementById('productListBody');
-    if (!tbody) {
-      console.error("DOM Error: #productListBody not found in the HTML.");
-      return;
-    }
+    if (!tbody) return;
+
 
     if (this.filteredProducts.length === 0) {
       tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="padding:24px; color:var(--text-muted);">No products found.</td></tr>';
       return;
     }
 
-    
-    try {
       tbody.innerHTML = this.filteredProducts.map(p => {
         const isLow = p.stock <= 5;
         const isOut = p.stock <= 0;
+        const specs = this.formatAttributesSummary(p.attributes);
         
         return `
           <tr>
             <td>
               <strong>${Utils.escapeHtml(p.name)}</strong>
+              ${specs ? `<div style="font-size:0.78rem; color:#0284c7;">${specs}</div>` : ''}
               ${p.barcode ? `<div style="font-size:0.75rem; color:var(--text-muted);">Barcode: ${Utils.escapeHtml(p.barcode)}</div>` : ''}
             </td>
             <td><span class="badge badge-neutral">${Utils.escapeHtml(p.category || 'General')}</span></td>
@@ -146,29 +171,28 @@ const Products = {
             </td>
           </tr>
         `;
-      }).join('')
-
-    } catch (err) {
-      // FIXED: Extra > removed
-      tbody.innerHTML = `<tr><td colspan="7" style="color:red; padding:20px;">HTML render error: ${err.message}</td></tr>`;
-    }
+      }).join('');
   },
 
   renderMatrixView() {
     const container = document.getElementById('matrixViewContainer');
+    const names = new Set(this.categories.map(c => c.name));
+    this.products.forEach(p => {if (p.category) names.add(p.category); });
+
+    const catButtons = ['all', ...Array.from(names).sort()].map(c => {
+      const active = this.matrixCategory.toLowerCase() === c.toLowerCase();
+      const label = c === 'all' ? 'All Categories' : Utils.escapeHtml(c);
+      return `<button class="btn btn-sm ${active ? 'btn-primary' : 'btn-outline'}" onclick="Products.setMatrixCategory('${Utils.escapeHtml(c)}')">${label}</button>`;
+    }).join('');
     
     // Build the matrix table HTML dynamically
     container.innerHTML = `
       <div class="card" style="margin-bottom:16px;">
         <div class="card-body" style="padding:14px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button class="btn btn-sm btn-primary" onclick="Products.setMatrixCategory('all')">All Categories</button>
-            <button class="btn btn-sm btn-outline" onclick="Products.setMatrixCategory('HDPE Pipes')">HDPE Pipes</button>
-            <button class="btn btn-sm btn-outline" onclick="Products.setMatrixCategory('Fittings & Accessories')">Fittings</button>
-          </div>
-          <div style="display:flex; gap:10px;">
-            <button class="btn btn-sm btn-outline" onclick="Products.bulkApplyCategoryDiscount(10, 20)">Set All -10% / -20%</button>
-            <button class="btn btn-sm btn-success" onclick="Products.saveCategoricalPricesMatrix()">Save Matrix</button>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">${catButtons}</div>
+          <div style="display:flex; gap: 10px;">
+            <button class="btn btn-sm btn-outline" onclick="Products.bulkApplyCategoryDiscount(10, 20)">Set All -10%/ -20%</button>
+            <button class="btn btn-sm btn-success" onclick="Products.saveCategoricalPriceMatrix()">Save Matrix</button>
           </div>
         </div>
       </div>
@@ -178,7 +202,7 @@ const Products = {
           <table class="data-table">
             <thead>
               <tr>
-                <th>Product</th>
+                <th>Product & Specs</th>
                 <th>Category</th>
                 <th>Retailer Price</th>
                 <th>Wholesaler Price</th>
@@ -186,15 +210,21 @@ const Products = {
               </tr>
             </thead>
             <tbody>
-              ${this.products.filter(p => this.matrixCategory === 'all' || (p.category || '').toLowerCase() === this.matrixCategory.toLowerCase()).map(p => `
+              ${this.products.filter(p => this.matrixCategory === 'all' || (p.category || '').toLowerCase() === this.matrixCategory.toLowerCase()).map(p => {
+                const specs = this.formatAttributesSummary(p.attributes);
+              return `
                 <tr data-prod-id="${p.id}">
-                  <td><strong>${Utils.escapeHtml(p.name)}</strong></td>
-                  <td><span class="badge badge-neutral">${p.category}</span></td>
+                  <td>
+                  <strong>${Utils.escapeHtml(p.name)}</strong>
+                  ${specs ? `<div style="font-size:0.75rem; color:var(--text-muted);">${specs}</div>` : '' }
+                  </td>
+                  <td><span class="badge badge-neutral">${Utils.escapeHtml(p.category || 'General')}</span></td>
                   <td><input type="number" class="form-control matrix-retail" value="${p.price}" style="width:110px;" /></td>
                   <td><input type="number" class="form-control matrix-ws" value="${p.wholesale_price || ''}" placeholder="${p.price}" style="width:110px; color:#0284c7;" /></td>
                   <td><input type="number" class="form-control matrix-dist" value="${p.distributor_price || ''}" placeholder="${p.price}" style="width:110px; color:#7c3aed;" /></td>
                 </tr>
-              `).join('')}
+              `;
+              }).join('')}
             </tbody>
           </table>
         </div>
@@ -246,24 +276,30 @@ const Products = {
 
   openModal(id = null) {
     const product = id ? this.products.find(p => p.id === id) : null;
+    const catNames = new Set(this.categories.map(c => c.name));
+    if (product?.category) catNames.add(product.category);
+    catNames.add('General');
+
+    const catOptions = Array.from(catNames).sort().map(name =>
+      `<option value="${Utils.escapeHtml(name)}" ${product?.category === name ? 'selected' : ''}>${Utils.escapeHtml(name)}</option>`
+    ).join('');
     
     Utils.showModal({
       title: product ? 'Edit Product' : 'Add New Product',
       content: `
         <input type="hidden" id="productId" value="${product ? product.id : ''}" />
         <div class="form-group">
-          <label class="form-label">Product Name *</label>
-          <input type="text" id="prodName" class="form-control" value="${product ? Utils.escapeHtml(product.name) : ''}" />
+        <label class="form-label">Category</label>
+        <select id="prodCategory" class="form-control">${catOptions}</select>
         </div>
+
+        <div id="dynamicAttributesContainer" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;"></div>
+
         <div class="form-group">
-          <label class="form-label">Category</label>
-          <select id="prodCategory" class="form-control">
-            <option value="HDPE Pipes" ${product?.category === 'HDPE Pipes' ? 'selected' : ''}>HDPE Pipes</option>
-            <option value="Fittings & Accessories" ${product?.category === 'Fittings & Accessories' ? 'selected' : ''}>Fittings & Accessories</option>
-            <option value="Heavy Duty Sacks" ${product?.category === 'Heavy Duty Sacks' ? 'selected' : ''}>Heavy Duty Sacks</option>
-            <option value="General" ${product?.category === 'General' ? 'selected' : ''}>General</option>
-          </select>
+          <label class="form-label">Product Name * <small style="color:var(--text-muted);">(leave blank to auto-build from specs)</small></label>
+          <input type="text" id="prodName" class="form-control" value="${product ? Utils.escapeHtml(product.name) : ''}" placeholder="e.g. Pipe 20mm 0.5 in PN8 SDR21" />
         </div>
+      
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:12px;">
           <div class="form-group">
             <label class="form-label" style="color:var(--text-main);">Retail Price *</label>
@@ -295,23 +331,72 @@ const Products = {
       `
     });
 
+    const renderAttrFields = (catName, existingAttrs = {}) => {
+      const box = document.getElementById('dynamicAttributesContainer');
+      const cat = this.categories.find(c => c.name.toLowerCase() === (catName || '').toLowerCase());
+      const schema = cat?.attributes_schema || [];
+
+      if (!schema.length) {
+        box.innerHTML = '';
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'grid';
+      box.innerHTML = schema.map(field => {
+        const val = existingAttrs[field.key] ?? '';
+        return `
+        <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label" style="font-size:0.8rem;">${Utils.escapeHtml(field.label)}</label>
+        <input type="${field.type === 'number' ? 'number' : 'text'}"
+          step="any"
+          class="form-control dynamic-attr-input"
+          data-attr-key="${Utils.escapeHtml(field.key)}"
+          value="${Utils.escapeHtml(String(val))}" />
+        </div>
+        `;
+      }).join('');
+    };
+
+    const catSelect = document.getElementById('prodCategory');
+    renderAttrFields(catSelect.value, product?.attributes || {});
+    catSelect.addEventListener('change', () => renderAttrFields(catSelect.value, {}));
+
     document.getElementById('btnSaveProduct').addEventListener('click', async (e) => {
       const btn = e.target;
       btn.innerHTML = '<span class="spinner"></span> Saving...';
       btn.disabled = true;
 
+      const category = document.getElementById('prodCategory').value;
+      const attributes = {};
+      const attrValues = [];
+      document.querySelectorAll('.dynamic-attr-input').forEach(inp => {
+        const key = inp.dataset.attrKey;
+        const val = inp.value.trim();
+        if (val !== '') {
+          attributes[key] = inp.type === 'number' ? parseFloat(val) : val;
+          attrValues.push(val);
+        } 
+      });
+
+      let name = document.getElementById('prodName').value.trim();
+      if (!name && attrValues.length) {
+        name = `${category} (${attrValues.join(' / ')})`;
+      }
+
       const data = {
-        name: document.getElementById('prodName').value.trim(),
-        category: document.getElementById('prodCategory').value,
+        name,
+        category,
+        attributes,
         price: parseFloat(document.getElementById('prodPrice').value),
         wholesale_price: parseFloat(document.getElementById('prodWholesalePrice').value) || null,
         distributor_price: parseFloat(document.getElementById('prodDistributorPrice').value) || null,
-        stock: parseInt(document.getElementById('prodStock').value) || 0,
+        stock: parseFloat(document.getElementById('prodStock').value) || 0,
         barcode: document.getElementById('prodBarcode').value.trim()
       };
 
       if (!data.name || isNaN(data.price)) {
-        Utils.toast('Name and Retail Price are required', 'warning');
+        Utils.toast('Product Name (or specs) and Retail Price are required', 'warning');
         btn.innerHTML = 'Save Product';
         btn.disabled = false;
         return;
@@ -433,7 +518,62 @@ const Products = {
         Utils.toast(err.message, 'danger');
       }
     });
-  }
-};
+  },
 
+  openCategoryModal() {
+    Utils.showModal({
+      title : 'Manage Product Categories & Parameters',
+      content: `
+      <div class="form-group">
+        <label class="form-label">Category Name *</label>
+        <input type="text" id="catParamsInput" class="form-control" placeholder="e.g. Pipes, Water Tanks, Hardware" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Parameters (comma-separated, leave blank if none)</label>
+        <input type="text" id="catParamsInput" class="form-control" placeholders="e.g. Outer Diameter (mm), Nominal Size (in), PN, SDR" />
+      </div>
+      <div style="margin-top:14px;">
+        <strong>Existing Categories:</strong>
+        <ul style="margin-top:6px; padding-left:18px; font-size:0.85rem;">
+          ${this.categories.map(c => `
+            <li>
+              <strong>${Utils.escapeHtml(c.name)}</strong>:
+              ${(c.attributes_schema || []).map(a => Utils.escapeHtml(a.label)).join(', ') || 'No custom parameters'}
+        </li>
+      `).join('')}
+      </ul>
+      </div>
+    `,
+    footer: `
+    <button class=:btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()>CLose</button>
+    <button class="btn btn-primary" id="btnSaveCategory">Save Category</button>
+    `
+          });
+          document.getElementById('btnSaveCategory').addEventListener('click', async () => {
+            const name = document.getElementById('catNameInput').value.trim();
+            const rawParams = document.getElementById('catParamsInput').value.trim();
+            if (!name) return Utils.toast('Category name is required', 'warning');
+
+            const attributes_schema = rawParams
+              ? rawParams.split(',').map(s => s.trim()).filter(Boolean).map(label => ({
+                key: label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
+                label,
+                type: 'text'
+              }))
+              : [];
+
+              try {
+                await DB._fetch('/api/products/categories', {
+                  method: 'POST',
+                  body: JSON.stringify({ name, attributes_schema })
+                });
+                document.querySelector('.modal-overlay').remove();
+                Utils.toast('Category saved!', 'success');
+                this.loadList();
+              } catch (e) {
+                Utils.toast(e.message, 'danger');
+              }
+          });
+        },
+      }
 window.Products = Products;

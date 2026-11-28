@@ -154,9 +154,12 @@ function buildSidebar() {
   // Add Nav Links
   items.forEach(item => {
     const isPendingPage = item.page === 'pending-payments';
+    const isTransferPage = item.page === 'transfers';
     const badgeHTML = isPendingPage
     ? `<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`
-    : '';
+    : ''
+    ? `<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`
+    : isTransferPage;
 
     html += `
       <li class="nav-item">
@@ -300,14 +303,14 @@ setInterval(async () => {
 
   try {
     const data = await DB._fetch('/api/notifications/pending-count');
-    const badge = document.getElementById('pendingAlertBadge');
+    const tbadge = document.getElementById('transferAlertBadge');
 
-    if (badge) {
-      if (data.count > 0) {
-        badge.textContent = data.count;
-        badge.style.display = 'inline-block';
+    if (tbadge) {
+      if (data.transfer_count > 0) {
+        tbadge.textContent = data.transfer_count;
+        tbadge.style.display = 'inline-block';
       } else {
-        badge.style.display = 'none';
+        tbadge.style.display = 'none';
       }
     }
   } catch (e) {}

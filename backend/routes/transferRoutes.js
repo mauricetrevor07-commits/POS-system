@@ -118,7 +118,7 @@ router.put('/:id/receive', auth, async (req, res) => {
 
         await client.query(`
             UPDATE transfers
-            SET status = 'received', received_by = $1, received_at = NOw()
+            SET status = 'received', received_by = $1, received_at = NOw(), admin_seen = false
             WHERE id = $2
             `, [req.user.username, transferId]);
 
@@ -143,6 +143,13 @@ router.put('/:id/cancel', auth, async (req, res) => {
         if (!transferRes.rows.length) throw new Error('Transfer not found or already processed');
 
         const transfer = transferRes.rows[0];
+        if (
+            req.user.role !== 'admin' &&
+            req.user.branch_id !== transfer.from_branch_id &&
+            req.user.branch_id !== transfer.to_branch_id
+        ) {
+            throw new Error('You are not authorized to cancel this transfer');
+        }
         const itemsRes = await client.query('SELECT * FROM transfer_items WHERE transfer_id = $1', [transferId]);
 
         for (let item of itemsRes.rows) {
@@ -153,7 +160,7 @@ router.put('/:id/cancel', auth, async (req, res) => {
                 `, [item.quantity, transfer.from_branch_id, item.product_id]);
         }
 
-        await client.query(`UPDATE transfers SET status = 'cancelled' WHERE id = $1`, [transferId]);
+        await client.query(`UPDATE transfers SET status = 'cancelled', admin_seen = false WHERE id = $1`, [transferId]);
         await client.query('COMMIT');
         res.json({ success: true});
     } catch (err) {
@@ -162,6 +169,12 @@ router.put('/:id/cancel', auth, async (req, res) => {
     } finally {
         client.release();
     }
+});
+
+router.put('/mark-seen', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.join({ success: true });
+    await db.query(`UPDATE transfers SET admin_seen = true WHERE status IN ('received'), 'cancelled') AND admin_seen = false`);
+    res.json({ success: true });
 });
 
 module.exports = router;

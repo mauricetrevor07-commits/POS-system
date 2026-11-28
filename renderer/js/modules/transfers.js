@@ -135,7 +135,7 @@
       const itemsSummary = (t.items || []).map(i => `<strong>${Utils.escapeHtml(i.product_name || 'Item')}</strong> &times; ${i.quantity}`).join('<br>');
       
       const canReceive = isPending && (role === 'admin' || userBranch === t.to_branch_id);
-      const canCancel = isPending && (role === 'admin' || userBranch === t.from_branch_id);
+      const canCancel = isPending && (role === 'admin' || userBranch === t.from_branch_id || userBranch === t.to_branch_id);
 
       return `
         <tr>
@@ -357,6 +357,14 @@
       Utils.toast(e.message, 'danger');
     }
   },
+
+  async Transfersload() {
+  if (localStorage.getItem('userRole') === 'admin') {
+    DB._fetch('/api/transfers/mark-seen', {method:'PUT' }).catch(() => {});
+    const tbadge = document.getElementById('transferAlertBadge');
+    if (tbadge) tbadge.style.display = 'none;'
+  }
+},
 
   printVoucher(id) {
     const t = this.transfers.find(item => item.id === id);

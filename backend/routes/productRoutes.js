@@ -23,12 +23,12 @@ router.get('/', authMiddleware, asyncHandler(async (req, res) => {
 // POST /api/products (Create)
 router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const id = randomUUID();
-  const { name, price, wholesale_price, distributor_price, category, stock, barcode } = req.body;
+  const { name, price, wholesale_price, distributor_price, category, stock, barcode, attributes } = req.body;
   const targetBranch = req.user.branch_id || 1;
   const initialStock = parseFloat(stock) || 0;
 
   await db.query(
-    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, category, barcode) 
+    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, category, barcode, attributes = $8::jsonb(JSON.stringify(attributes || {})) 
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
     [id, name, parseFloat(price), wholesale_price, distributor_price, initialStock, category, barcode]
   );
@@ -45,6 +45,30 @@ router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   res.status(201).json({ id, name, price, stock: initialStock });
 }));
 
+router.get('/categories', authMiddleware, asyncHandler(async (req, res) => {
+  const result = await db.query('SELECT * FROM product_categories ORDER BY name');
+  res.json(result.rows);
+}));
+
+router.post('/categories', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
+  const { name, attributes_schema } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
+
+  const result = await db.query(
+    `INSERT INTO product_categories (name, attributes_schema)
+    VALUES ($1, $2::jsonb)
+    ON CONFLICT (name) DO UPDATE SET attributes_schema = EXCLUDED.attributes_schema
+    RETURNING *`,
+    [name.trim(), JSON.stringify(attributes_schema || [])]
+  );
+  res.status(201).json(result.rows[0]);
+}));
+
+router.delete('/categories/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
+  await db.query('DELETE FROM product_categories WHERE id = $1', [req.params.id]);
+  res.json({ success: true });
+}));
+
 // PUT /api/products/:id (Update)
 router.put('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const { name, price, wholesale_price, distributor_price, category, stock, barcode } = req.body;
@@ -52,7 +76,7 @@ router.put('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
 
   await db.query(
     `UPDATE products 
-     SET name=$1, price=$2, wholesale_price=$3, distributor_price=$4, category=$5, barcode=$6, updated_at=NOW() 
+     SET name=$1, price=$2, wholesale_price=$3, distributor_price=$4, category=$5, barcode=$6, updated_at=NOW(), attributes = $8::jsonb (JSON.stringify(attributes || {})) 
      WHERE id=$7`,
     [name, parseFloat(price), wholesale_price, distributor_price, category, barcode, req.params.id]
   );
