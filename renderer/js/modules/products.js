@@ -31,7 +31,7 @@ const Products = {
     document.getElementById('btnExportTemplate')?.addEventListener('click', () => this.exportStockTemplate());
     document.getElementById('btnImportStock')?.addEventListener('click', () => this.openImportModal());
     document.getElementById('btnAddProduct')?.addEventListener('click', () => this.openModal());
-    document.getElementById('btnManagecategories')?.addEventListener('click', () => this.openCategoryModal());
+    document.getElementById('btnManageCategories')?.addEventListener('click', () => this.openCategoryModal());
 
     const filters = ['prodSearchInput', 'prodCatFilter', 'prodStockFilter'];
     filters.forEach(id => {

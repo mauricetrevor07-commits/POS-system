@@ -155,11 +155,12 @@ function buildSidebar() {
   items.forEach(item => {
     const isPendingPage = item.page === 'pending-payments';
     const isTransferPage = item.page === 'transfers';
-    const badgeHTML = isPendingPage
-    ? `<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`
-    : ''
-    ? `<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`
-    : isTransferPage;
+    let badgeHTML = '';
+    if (isPendingPage) {
+      badgeHTML =`<span id="pendingAlertBadge" class="badge badge-danger" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`;
+    } else if (isTransferPage) {
+      badgeHTML =`<span id="pendingAlertBadge" class="badge badge-success" style="display:none; margin-left:auto; padding: 2px 6px; font-size: 0.7rem;">0</span>`;
+    }
 
     html += `
       <li class="nav-item">
