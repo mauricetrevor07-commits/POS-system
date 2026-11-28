@@ -545,7 +545,7 @@ const Products = {
                 <button class="btn btn-secondary btn-sm" onclick="Products.editCategory(${c.id})" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </button>
-              <button class="btn btn-danger btn-sm" onclick="Products.deleteCategory(${c.id}", title="Delete">
+              <button class="btn btn-danger btn-sm" onclick="Products.deleteCategory(${c.id})", title="Delete">
                 <i class="bi bi-trash"></i>
               </button>
             </span>

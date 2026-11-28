@@ -28,9 +28,9 @@ router.post('/', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const initialStock = parseFloat(stock) || 0;
 
   await db.query(
-    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, category, barcode, attributes = $8::jsonb(JSON.stringify(attributes || {})) 
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [id, name, parseFloat(price), wholesale_price, distributor_price, initialStock, category, barcode]
+    `INSERT INTO products (id, name, price, wholesale_price, distributor_price, stock, category, barcode, attributes) 
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+    [id, name, parseFloat(price), wholesale_price, distributor_price, initialStock, category, barcode, JSON.stringify(attributes || {})]
   );
 
   const branches = await db.query("SELECT id FROM branches");
@@ -71,14 +71,14 @@ router.delete('/categories/:id', authMiddleware, adminOnly, asyncHandler(async (
 
 // PUT /api/products/:id (Update)
 router.put('/:id', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
-  const { name, price, wholesale_price, distributor_price, category, stock, barcode } = req.body;
+  const { name, price, wholesale_price, distributor_price, category, stock, barcode, attributes } = req.body;
   const targetBranch = req.user.branch_id || 1;
 
   await db.query(
     `UPDATE products 
-     SET name=$1, price=$2, wholesale_price=$3, distributor_price=$4, category=$5, barcode=$6, updated_at=NOW(), attributes = $8::jsonb (JSON.stringify(attributes || {})) 
+     SET name=$1, price=$2, wholesale_price=$3, distributor_price=$4, category=$5, barcode=$6, attributes = $8::jsonb, updated_at=NOW() 
      WHERE id=$7`,
-    [name, parseFloat(price), wholesale_price, distributor_price, category, barcode, req.params.id]
+    [name, parseFloat(price), wholesale_price, distributor_price, category, barcode, req.params.id, JSON.stringify(attributes || {})]
   );
 
   if (stock !== undefined) {
