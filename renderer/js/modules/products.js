@@ -534,18 +534,23 @@ const Products = {
       </div>
       <div style="margin-top:14px;">
         <strong>Existing Categories:</strong>
-        <ul style="margin-top:6px; padding-left:18px; font-size:0.85rem;">
+        <ul style="margin-top:6px; padding-left:0; list-style:none; font-size:0.85rem;">
           ${this.categories.map(c => `
-            <li>
+            <li style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
+              <span>
               <strong>${Utils.escapeHtml(c.name)}</strong>:
               ${(c.attributes_schema || []).map(a => Utils.escapeHtml(a.label)).join(', ') || 'No custom parameters'}
+              </span>
+              <button class="btn btn-danger btn-sm" onclick="Product.deleteCategory(${c.id}, '${Utils.escapeHtml(c.name)}')">
+                <i class="bi bi-trash"></i>
+              </button>
         </li>
       `).join('')}
       </ul>
       </div>
     `,
     footer: `
-    <button class="btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()>CLose</button>
+    <button class="btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()">Close</button>
     <button class="btn btn-primary" id="btnSaveCategory">Save Category</button>
     `
           });
@@ -574,6 +579,19 @@ const Products = {
                 Utils.toast(e.message, 'danger');
               }
           });
+        },
+
+        async deleteCategory(id, name) {
+          if (!confirm(`Delete category "${name}"? Existing products in this category will remain intact.`)) return;
+          try {
+            await DB._fetch(`/api/products/categories/${id}`, { method: 'DELETE' });
+            document.querySelector('.modal-overlay')?.remove();
+            Utils.toast(`Category "${name}" deleted`, 'success');
+            await this.loadList();
+            this.openCategoryModal();
+          } catch (e) {
+            Utils.toast(e.message, 'danger');
+          }
         },
       }
 window.Products = Products;
