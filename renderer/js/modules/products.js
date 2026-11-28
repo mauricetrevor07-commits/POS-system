@@ -526,7 +526,7 @@ const Products = {
       content: `
       <div class="form-group">
         <label class="form-label">Category Name *</label>
-        <input type="text" id="catParamsInput" class="form-control" placeholder="e.g. Pipes, Water Tanks, Hardware" />
+        <input type="text" id="catNameInput" class="form-control" placeholder="e.g. Pipes, Water Tanks, Hardware"/>
       </div>
       <div class="form-group">
         <label class="form-label">Parameters (comma-separated, leave blank if none)</label>
@@ -545,7 +545,7 @@ const Products = {
       </div>
     `,
     footer: `
-    <button class=:btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()>CLose</button>
+    <button class="btn btn-secondary" onclick="document.querySelector('.modal-overlay').remove()>CLose</button>
     <button class="btn btn-primary" id="btnSaveCategory">Save Category</button>
     `
           });
