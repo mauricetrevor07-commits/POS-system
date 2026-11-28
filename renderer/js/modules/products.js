@@ -541,7 +541,7 @@ const Products = {
               <strong>${Utils.escapeHtml(c.name)}</strong>:
               ${(c.attributes_schema || []).map(a => Utils.escapeHtml(a.label)).join(', ') || 'No custom parameters'}
               </span>
-              <button class="btn btn-danger btn-sm" onclick="Product.deleteCategory(${c.id}, '${Utils.escapeHtml(c.name)}')">
+              <button class="btn btn-danger btn-sm" onclick="Products.deleteCategory(${c.id}, '${Utils.escapeHtml(c.name)}')">
                 <i class="bi bi-trash"></i>
               </button>
         </li>
